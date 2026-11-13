@@ -1,0 +1,8 @@
+{
+ "SGD": 0.3,
+ "Momentum": 0.01,
+ "Nesterov": 0.003,
+ "RMSprop": 0.0003,
+ "Adam": 0.0003,
+ "AdamW": 0.0003
+}

@@ -1,0 +1,121 @@
+\chapter{Introducción}
+\label{cap:introduccion}
+
+\section{Motivación}
+
+La epilepsia es una de las enfermedades neurológicas crónicas más frecuentes: afecta a unos 50 millones de personas en
+el mundo \parencite{who2024}. Clínicamente se define por una predisposición duradera a generar crisis epilépticas no
+provocadas; en la práctica, por dos crisis no provocadas separadas por más de 24 horas, o una crisis con un riesgo de
+recurrencia alto \parencite{fisher2014}. Una \emph{crisis} es un episodio transitorio de actividad neuronal anormalmente
+excesiva o sincrónica. Esa sincronía es la que hace que la crisis sea visible en el electroencefalograma (EEG): millones
+de neuronas que descargan juntas producen oscilaciones de gran amplitud y frecuencia definida, muy distintas de la
+actividad de fondo.
+
+El EEG es la herramienta central para diagnosticar la epilepsia, clasificar el tipo de crisis y decidir el tratamiento.
+En una unidad de monitoreo se registran pacientes durante días seguidos, con decenas de canales, para capturar sus crisis.
+Revisar a mano ese volumen es lento y caro: un registro de 24 horas lleva horas de lectura de un especialista, y las
+crisis ocupan una fracción mínima del tiempo (el 0,37~\% en los datos de este trabajo). Un \textbf{detector automático}
+que marque los momentos sospechosos sirve para dos cosas: acortar la revisión y avisar al personal mientras la crisis
+ocurre, cuando todavía se puede intervenir.
+
+La dificultad no es separar una crisis típica de la actividad normal, que un modelo simple hace bien, sino hacerlo
+\emph{con muy pocas falsas alarmas} y \emph{en un paciente que el modelo no vio}. Con 900 ventanas de 4~s por hora, una
+especificidad de 99~\% da 9 falsas alarmas por hora, inaceptables en la práctica. Y el EEG de cada persona es distinto:
+cambian la amplitud, las frecuencias dominantes y la forma de las crisis. Estas dos condiciones (desbalance extremo y
+variabilidad entre pacientes) atraviesan todo el trabajo y son las que determinan las métricas, los modelos y las
+conclusiones.
+
+\section{El problema como aprendizaje automático}
+
+Formalmente, el EEG de un paciente se divide en ventanas de duración fija y a cada ventana $\mathbf{X}$ se le asigna una
+etiqueta $y \in \{0, 1\}$ (crisis o no). El objetivo es aprender una función $s(\mathbf{X})$, un \emph{puntaje}, tal que
+la regla $\hat y = \mathds{1}[s(\mathbf{X}) > \tau]$ detecte la mayor cantidad de crisis con una tasa de falsas alarmas
+acotada. Eso conecta el problema con cuatro áreas que el trabajo desarrolla:
+\begin{itemize}
+  \item \textbf{Procesamiento de señales.} La crisis se manifiesta como un cambio en el contenido de frecuencias. La
+        transformada de Fourier y sus estimadores (periodograma, Welch, espectrograma) convierten la señal en atributos
+        que hacen visible ese cambio.
+  \item \textbf{Optimización.} Entrenar un modelo es minimizar una función de pérdida. Si es convexa (regresión logística,
+        SVM), todo mínimo local es global y el resultado no depende del punto inicial. Si no lo es (redes neuronales), sí,
+        y la elección del algoritmo y de su tasa de aprendizaje pasa a ser parte del modelo.
+  \item \textbf{Optimización con restricciones.} El umbral $\tau$ no se elige minimizando el error: se elige maximizando la
+        sensibilidad con una tasa de falsos positivos fija. Es un problema con restricción, que se resuelve con un
+        multiplicador de Lagrange (lema de Neyman-Pearson) y, en su versión discreta, con programación lineal.
+  \item \textbf{Evaluación.} Exactitud, sensibilidad, especificidad, curva ROC, AUC y matriz de confusión miden cosas
+        distintas, y con clases tan desbalanceadas algunas pueden ser engañosas. A esas se suman las métricas clínicas:
+        crisis detectadas, falsas alarmas por hora y latencia.
+\end{itemize}
+
+\section{Objetivos}
+
+\begin{enumerate}
+  \item Formular la detección de crisis como un problema de procesamiento de señales y de clasificación, a partir de un
+        modelo matemático del fenómeno.
+  \item Fundamentar matemáticamente cada paso: transformada de Fourier, convexidad y optimalidad local y global,
+        multiplicadores de Lagrange y condiciones KKT, método simplex y umbral de Neyman-Pearson.
+  \item Verificar numéricamente esos resultados sobre datos reales: unicidad del óptimo en un problema convexo, mínimos
+        múltiples en uno no convexo, condiciones KKT en el dual del SVM.
+  \item Entrenar y evaluar modelos convexos (regresión logística, SVM) y una red convolucional sobre espectrogramas.
+  \item Comparar seis optimizadores de primer orden (SGD, Momentum, Nesterov, RMSprop, Adam, AdamW) sobre la misma red, con
+        varias semillas y pruebas estadísticas.
+  \item Evaluar con métricas clínicas: sensibilidad y especificidad por ventana, sensibilidad por evento, falsas alarmas
+        por hora y latencia, sobre pacientes que no se usaron para entrenar.
+\end{enumerate}
+
+\section{Datos}
+
+Se usan dos bases públicas, descargadas de sus fuentes oficiales:
+\begin{itemize}
+  \item \textbf{Bonn} \parencite{andrzejak2001}: 500 segmentos de 23,6~s de un canal, en cinco grupos (voluntarios sanos,
+        pacientes fuera de crisis y pacientes durante crisis). Es chica, limpia y balanceada; sirve para estudiar el
+        espectro de las crisis y para ilustrar la teoría con un problema de tres clases.
+  \item \textbf{CHB-MIT} \parencite{shoeb2009,goldberger2000}: registros continuos de 23 canales de niños con epilepsia
+        refractaria. Se usan 6 pacientes, 223 horas y 34 crisis. Tiene el desbalance real y permite evaluar en pacientes
+        nuevos.
+\end{itemize}
+
+\section{Contribuciones}
+
+Más allá de reproducir técnicas conocidas, el trabajo llega a algunos resultados que no eran evidentes al principio:
+\begin{itemize}
+  \item Una \textbf{calibración por paciente} muy simple, restar la mediana de cada atributo, se deduce del modelo
+        multiplicativo del EEG y sube el AUC de la regresión logística de 0,80 a 0,93 en pacientes nuevos.
+  \item En la comparativa de optimizadores, \textbf{la ventaja de SGD sobre los métodos adaptativos resultó ser un efecto de la
+        tasa de aprendizaje}: con la tasa alta de cada grilla, SGD, RMSprop, Adam y AdamW quedan empatados.
+  \item \textbf{Un solo paciente de validación no sirve para elegir hiperparámetros}: está saturado (AUC entre 0,996 y 0,999
+        para todas las redes) y no predice el desempeño en prueba.
+  \item \textbf{El modelo con menor AUC es el mejor detector}: la red convolucional tiene menor AUC que la regresión logística
+        calibrada, pero detecta 11 de 14 crisis contra 7, con las mismas falsas alarmas y la mitad de latencia. La
+        diferencia está en la zona de pocas falsas alarmas, que el AUC no pondera.
+\end{itemize}
+
+\section{Organización del trabajo}
+
+\begin{itemize}
+  \item El \textbf{Capítulo~\ref{cap:fenomeno}} describe el fenómeno: el origen fisiológico del EEG, un modelo matemático de
+        la señal con y sin crisis, y las hipótesis que se ponen a prueba.
+  \item El \textbf{Capítulo~\ref{cap:fourier}} desarrolla la transformada de Fourier discreta, el muestreo, el filtrado y la
+        estimación espectral (periodograma, Welch, espectrograma), aplicados a Bonn.
+  \item El \textbf{Capítulo~\ref{cap:datos}} presenta las dos bases, el preprocesamiento, el análisis exploratorio, las
+        particiones y la calibración por paciente.
+  \item El \textbf{Capítulo~\ref{cap:metricas}} define las métricas: matriz de confusión, sensibilidad, especificidad, curva ROC
+        y AUC, métricas por evento, el umbral de Neyman-Pearson y los esquemas de validación y pruebas estadísticas.
+  \item El \textbf{Capítulo~\ref{cap:optimizacion}} es el núcleo teórico: optimalidad local y global, convexidad, descenso por
+        gradiente y su convergencia, multiplicadores de Lagrange y KKT, el método simplex, el dual del SVM y el lema de
+        Neyman-Pearson.
+  \item El \textbf{Capítulo~\ref{cap:convexos}} entrena regresión logística y SVM en Bonn y en CHB-MIT, verifica numéricamente la
+        teoría y evalúa en pacientes nuevos con validación dejando un paciente afuera.
+  \item El \textbf{Capítulo~\ref{cap:cnn}} describe la red convolucional, la retropropagación, los seis optimizadores con su
+        análisis y el diseño del experimento.
+  \item El \textbf{Capítulo~\ref{cap:resultados}} presenta la comparativa de optimizadores, la evaluación clínica de la red y su
+        comparación con los modelos convexos.
+  \item El \textbf{Capítulo~\ref{cap:conclusiones}} discute los resultados, las limitaciones y el trabajo futuro.
+  \item El \textbf{Apéndice~\ref{ap:reproducibilidad}} explica cómo reproducir todos los resultados.
+\end{itemize}
+
+\section{Reproducibilidad}
+
+Todo el código es propio y está en Python: cuatro notebooks, uno por etapa del trabajo, y cuatro scripts para la descarga,
+el preprocesamiento, las métricas y el entrenamiento de la red. Cada tabla y cada figura del informe sale de un archivo
+generado por esos notebooks. Las versiones de las bibliotecas y los pasos para reproducir están en el
+Apéndice~\ref{ap:reproducibilidad}. Todo se corrió en una computadora personal sin GPU.

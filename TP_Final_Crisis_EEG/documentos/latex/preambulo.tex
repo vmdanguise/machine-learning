@@ -1,0 +1,37 @@
+\usepackage[spanish,es-nodecimaldot,es-tabla]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools,bm}
+\usepackage{graphicx}
+\usepackage{booktabs,tabularx}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage[style=apa,backend=biber]{biblatex}
+\addbibresource{referencias.bib}
+
+\graphicspath{{figuras/}}
+% Mientras el notebook no haya generado una figura, se muestra un recuadro en su lugar.
+\let\includegraphicsoriginal\includegraphics
+\renewcommand{\includegraphics}[2][]{%
+  \IfFileExists{figuras/#2.pdf}{\includegraphicsoriginal[#1]{#2}}{%
+    \fbox{\parbox[c][4cm][c]{0.8\linewidth}{\centering Figura pendiente:\\ \texttt{\detokenize{#2}}}}}}
+
+\theoremstyle{plain}
+\newtheorem{teorema}{Teorema}[chapter]
+\newtheorem{proposicion}[teorema]{Proposición}
+\newtheorem{lema}[teorema]{Lema}
+\theoremstyle{definition}
+\newtheorem{definicion}[teorema]{Definición}
+\newtheorem{hipotesis}{Hipótesis}
+\renewcommand{\thehipotesis}{H\arabic{hipotesis}}
+\renewcommand{\qedsymbol}{$\blacksquare$}
+\renewcommand{\proofname}{Demostración}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\simplex}{\Delta^{N-1}}
+\newcommand{\TPR}{\mathrm{TPR}}
+\newcommand{\FPR}{\mathrm{FPR}}
+\newcommand{\pendiente}[1]{\textcolor{orange}{[\textbf{Pendiente:} #1]}}

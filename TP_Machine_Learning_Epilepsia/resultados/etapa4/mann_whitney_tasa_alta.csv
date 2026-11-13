@@ -1,0 +1,6 @@
+comparacion,U,p_valor
+SGD vs Momentum (tasa alta),24.0,0.0159
+SGD vs Nesterov (tasa alta),22.0,0.0556
+SGD vs RMSprop (tasa alta),13.0,1.0
+SGD vs Adam (tasa alta),18.0,0.3095
+SGD vs AdamW (tasa alta),19.0,0.2222

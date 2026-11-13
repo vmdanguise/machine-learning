@@ -1,0 +1,12 @@
+{
+  "fs": 173.61,
+  "n_muestras": 4097,
+  "n_segmentos": 500,
+  "filtro": "Butterworth orden 4, pasabajos 40 Hz, filtfilt",
+  "welch": {
+    "ventana": "hann",
+    "nperseg": 512,
+    "noverlap": 256
+  },
+  "fuente": "https://www.ukbonn.de/epileptologie/arbeitsgruppen/ag-lehnertz-neurophysik/downloads/"
+}

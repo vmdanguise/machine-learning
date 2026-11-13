@@ -1,0 +1,74 @@
+\chapter{Modelos y funciones de activación}
+\label{cap:modelos}
+
+\section{Regresión logística}
+
+El modelo es $P(y=1\mid\bm x) = \sigma(\bm w^\top\bm x + b)$. La frontera de decisión es el hiperplano $\bm w^\top\bm x + b = t'$ y la pérdida (capítulo~\ref{cap:aprendizaje}) es convexa en $(\bm w, b)$, como se demuestra en el capítulo~\ref{cap:optimizacion}.
+
+\section{Máquinas de vectores soporte y dualidad de Lagrange}
+
+\pendiente{2--3 páginas: problema primal de margen máximo, lagrangiano, condiciones KKT, problema dual, vectores soporte \cite[cap.~5]{duda2001}. Se presenta como ejemplo clásico del uso de multiplicadores de Lagrange; no forma parte de la comparación experimental.}
+
+\section{Perceptrón multicapa}
+
+Una red de $L$ capas ocultas calcula
+\begin{equation}
+\bm h^{(0)} = \bm x,\qquad \bm z^{(l)} = W^{(l)}\bm h^{(l-1)} + \bm b^{(l)},\qquad \bm h^{(l)} = \phi(\bm z^{(l)}),\qquad z = \bm w^\top \bm h^{(L)} + b,
+\end{equation}
+con salida $\sigma(z)$. Para clasificación en $K$ clases la salida sería $\operatorname{softmax}(\bm z)_k = e^{z_k}/\sum_j e^{z_j}$, cuyo vector de salida vive en el simplex $\Delta^{K-1}$; en el caso binario se reduce a la sigmoide.
+
+\section{Teorema de aproximación universal}
+
+\begin{teorema}[\cite{leshno1993}]
+Sea $\phi:\R\to\R$ continua. El conjunto de funciones $\{\sum_{j=1}^m a_j\,\phi(\bm w_j^\top\bm x + b_j)\}$ es denso en $C(K)$ para todo compacto $K\subset\R^d$ si y solo si $\phi$ no es un polinomio.
+\end{teorema}
+
+El resultado generaliza el de \textcite{cybenko1989} para funciones sigmoidales y justifica que todas las activaciones comparadas sean, en principio, suficientes. Las diferencias prácticas entre ellas no están en lo que \emph{pueden} representar sino en lo fácil que es \emph{entrenarlas} con descenso por gradiente.
+
+\section{Funciones de activación comparadas}
+
+\begin{table}[ht]
+\centering
+\caption{Funciones de activación y sus derivadas.}
+\label{tab:activaciones}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Activación & $\phi(z)$ & $\phi'(z)$ \\
+\midrule
+Sigmoide & $\sigma(z) = \dfrac{1}{1+e^{-z}}$ & $\sigma(z)(1-\sigma(z)) \le \tfrac14$ \\
+Tanh & $\tanh z$ & $1-\tanh^2 z \le 1$ \\
+ReLU & $\max(0,z)$ & $\mathbb{1}[z>0]$ \\
+Leaky ReLU & $\max(\alpha z, z)$, $\alpha = 0{,}01$ & $1$ si $z>0$; $\alpha$ si $z<0$ \\
+GELU & $z\,\Phi(z)$ & $\Phi(z) + z\,\varphi(z)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{proposicion}
+$\sigma'(z) \le 1/4$, con igualdad solo en $z = 0$.
+\end{proposicion}
+\begin{proof}
+$\sigma'(z) = s(1-s)$ con $s = \sigma(z)\in(0,1)$. La función $s(1-s)$ es una parábola cóncava con máximo $1/4$ en $s = 1/2$, es decir, en $z=0$.
+\end{proof}
+
+\pendiente{gráfico de las 5 funciones y sus derivadas; discusión de saturación, salida centrada en cero, neuronas muertas, suavidad (GELU, \cite{hendrycks2016}) y subgradiente de ReLU en 0.}
+
+\section{Propagación del gradiente y desvanecimiento}
+
+Por la regla de la cadena,
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial \bm h^{(l)}} = \Big(\prod_{k=l+1}^{L} W^{(k)\top} D^{(k)}\Big)\frac{\partial\mathcal{L}}{\partial\bm h^{(L)}},\qquad D^{(k)} = \operatorname{diag}\big(\phi'(\bm z^{(k)})\big).
+\end{equation}
+Tomando normas, $\big\|\partial\mathcal L/\partial\bm h^{(l)}\big\| \le \prod_{k>l}\|W^{(k)}\|\,\|D^{(k)}\|\;\big\|\partial\mathcal L/\partial\bm h^{(L)}\big\|$. Con la sigmoide $\|D^{(k)}\|\le 1/4$, así que si los pesos tienen norma cercana a 1 el gradiente que llega a la capa $l$ se atenúa al menos como $(1/4)^{L-l}$: las primeras capas casi no aprenden. Con ReLU, $\|D^{(k)}\|\le 1$ y la activación no atenúa el gradiente, pero una unidad con $z\le 0$ para todas las entradas tiene gradiente nulo para siempre (\emph{unidad muerta}). Leaky ReLU evita este problema con una pendiente $\alpha>0$ para $z<0$ \parencite{maas2013}.
+
+\section{Inicialización según la activación}
+
+Considérese $z_j = \sum_{i=1}^{n_{\text{in}}} W_{ji} h_i$ con $W_{ji}$ independientes, de media cero y varianza $v$, independientes de $h_i$. Entonces $\operatorname{Var}(z_j) = n_{\text{in}}\, v\, \E[h_i^2]$.
+\begin{itemize}
+  \item \textbf{Glorot/Xavier} \parencite{glorot2010}: para activaciones aproximadamente lineales cerca de 0 (tanh), conservar la varianza hacia adelante y hacia atrás lleva al compromiso $v = 2/(n_{\text{in}} + n_{\text{out}})$.
+  \item \textbf{He/Kaiming} \parencite{he2015}: con ReLU y $z$ simétrica, $\E[h^2] = \tfrac12\operatorname{Var}(z)$, de modo que conservar la varianza exige $v = 2/n_{\text{in}}$.
+\end{itemize}
+Para que la comparación de activaciones sea justa, cada una se usa con la inicialización que le corresponde.
+
+\pendiente{desarrollo completo de las dos derivaciones.}

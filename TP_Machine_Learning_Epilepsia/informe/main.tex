@@ -1,0 +1,92 @@
+% Informe del TP final de Machine Learning — Maestría en IA, Universidad de Palermo
+% Compilar en Overleaf con pdfLaTeX + Biber (Menu > Settings > Compiler: pdfLaTeX).
+\documentclass[11pt,a4paper,oneside]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-tabla,es-nodecimaldot,es-noshorthands]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools,bm}
+\usepackage{dsfont}  % \mathds{1}: función indicadora
+\usepackage{graphicx}
+\usepackage{booktabs,tabularx,multirow}
+\usepackage{siunitx}
+\sisetup{output-decimal-marker={,}, group-separator={.}, group-minimum-digits=4}
+\usepackage{caption,subcaption}
+\usepackage{xcolor}
+\usepackage{algorithm,algpseudocode}
+\usepackage{tikz}
+\floatname{algorithm}{Algoritmo}
+\renewcommand{\listalgorithmname}{Lista de algoritmos}
+\algrenewcommand\algorithmicrequire{\textbf{Entrada:}}
+\algrenewcommand\algorithmicensure{\textbf{Salida:}}
+\algrenewcommand\algorithmicfor{\textbf{para}}
+\algrenewcommand\algorithmicdo{\textbf{hacer}}
+\algrenewcommand\algorithmicwhile{\textbf{mientras}}
+\algrenewcommand\algorithmicif{\textbf{si}}
+\algrenewcommand\algorithmicthen{\textbf{entonces}}
+\algrenewcommand\algorithmicelse{\textbf{si no}}
+\algrenewcommand\algorithmicend{\textbf{fin}}
+\algrenewcommand\algorithmicreturn{\textbf{devolver}}
+\algrenewcommand\algorithmicloop{\textbf{repetir}}
+\usepackage[backend=biber,style=authoryear,maxcitenames=2,uniquelist=false]{biblatex}
+\addbibresource{referencias.bib}
+\usepackage[hidelinks]{hyperref}
+\usepackage[nameinlink,noabbrev,spanish]{cleveref}
+
+\graphicspath{{figuras/}}
+
+\theoremstyle{definition}
+\newtheorem{definicion}{Definición}[chapter]
+\theoremstyle{plain}
+\newtheorem{teorema}{Teorema}[chapter]
+\newtheorem{proposicion}[teorema]{Proposición}
+\newtheorem{lema}[teorema]{Lema}
+\theoremstyle{remark}
+\newtheorem{observacion}{Observación}[chapter]
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\vx}{\mathbf{x}}
+\newcommand{\vw}{\mathbf{w}}
+\newcommand{\vth}{\boldsymbol{\theta}}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\title{Detección automática de crisis epilépticas en EEG:\\
+fundamentos matemáticos, modelos convexos, redes convolucionales\\
+y comparativa de optimizadores}
+\author{Vicente Matias Danguise\\[2mm]
+Maestría en Inteligencia Artificial — Universidad de Palermo\\
+Machine Learning — Trabajo final individual}
+\date{Noviembre de 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\input{capitulos/00_resumen}
+\end{abstract}
+
+\tableofcontents
+\listoffigures
+\listoftables
+
+\input{capitulos/01_introduccion}
+\input{capitulos/02_fenomeno}
+\input{capitulos/03_fourier}
+\input{capitulos/04_datos}
+\input{capitulos/05_metricas}
+\input{capitulos/06_optimizacion}
+\input{capitulos/07_modelos_convexos}
+\input{capitulos/08_cnn_optimizadores}
+\input{capitulos/09_resultados}
+\input{capitulos/10_conclusiones}
+
+\appendix
+\input{capitulos/A_reproducibilidad}
+
+\printbibliography[heading=bibintoc,title={Referencias}]
+\end{document}

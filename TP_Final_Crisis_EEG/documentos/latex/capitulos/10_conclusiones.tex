@@ -1,0 +1,22 @@
+\chapter{Discusión y conclusiones}
+\label{cap:conclusiones}
+
+\section{Resumen de hipótesis}
+\pendiente{tabla con la evidencia de cada hipótesis (salida \texttt{resultados/resumen\_hipotesis.csv}).}
+
+\section{Discusión}
+\pendiente{interpretación de resultados; comparación con la literatura (p.~ej.\ \cite{shoeb2010}); relevancia clínica del umbral de 1 falsa alarma por hora.}
+
+\section{Limitaciones}
+\begin{itemize}
+  \item Solo se usó una muestra de los registros sin crisis, lo que aumenta artificialmente la prevalencia respecto de un monitoreo continuo.
+  \item La base es pediátrica y de un solo centro.
+  \item El modelo clasifica ventanas independientes, sin aprovechar la continuidad temporal.
+\end{itemize}
+
+\section{Trabajo futuro}
+\begin{itemize}
+  \item Redes convolucionales sobre el espectrograma, tratado como imagen \parencite{gonzalez2018}.
+  \item Clasificación multiclase (preictal, ictal, interictal) con salida softmax en el simplex.
+  \item Suavizado temporal de las decisiones y evaluación en registros continuos completos.
+\end{itemize}

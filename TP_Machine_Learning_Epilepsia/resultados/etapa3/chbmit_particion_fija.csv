@@ -1,0 +1,5 @@
+variante,modelo,umbral,AUC_val,AUC_prueba,TP,FN,FP,TN,sensibilidad,especificidad,VPP,F1,crisis,detectadas,sens_eventos,falsas_alarmas,horas_sin_crisis,FA_por_hora,latencia_mediana_s
+global,logistica,3.3065,0.9689,0.7988,61,140,1195,77803,0.3035,0.9849,0.0486,0.0837,14,5,0.3571,286,87.7756,3.2583,14.0
+global,svm_lineal,0.9428,0.9673,0.7976,61,140,1068,77930,0.3035,0.9865,0.054,0.0917,14,7,0.5,258,87.7756,2.9393,18.0
+calibrado,logistica,4.8741,0.9794,0.9342,54,147,467,78531,0.2687,0.9941,0.1036,0.1496,14,7,0.5,107,87.7756,1.219,26.0
+calibrado,svm_lineal,1.343,0.9769,0.9299,49,152,428,78570,0.2438,0.9946,0.1027,0.1445,14,6,0.4286,88,87.7756,1.0026,24.5

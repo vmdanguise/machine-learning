@@ -1,0 +1,24 @@
+Este trabajo estudia la detección automática de crisis epilépticas en el electroencefalograma (EEG) con dos bases
+públicas: Bonn (500 segmentos de un canal) y CHB-MIT (6 pacientes, 223 horas de registro continuo de 18 canales y 34
+crisis, que ocupan el 0,37~\% del tiempo). Cada paso tiene su fundamento matemático. A partir de un modelo de la señal
+con y sin crisis se deducen los atributos (potencia por banda con la transformada de Fourier y el método de Welch) y una
+calibración por paciente, que consiste en restar la mediana de cada atributo. Se desarrollan la optimalidad local y global
+y la convexidad, la convergencia del descenso por gradiente, los multiplicadores de Lagrange y las condiciones KKT, el
+método simplex y el lema de Neyman-Pearson, que da el umbral de decisión con una tasa de falsas alarmas fija.
+
+En Bonn, con 20 atributos espectrales, la regresión logística alcanza 97,4~\% de exactitud en tres clases y el SVM con núcleo
+RBF, 98,4~\%. Se verifica numéricamente que en la logística, que es convexa, 20 puntos iniciales llegan al mismo óptimo, y que
+una red neuronal chica termina en 8 mínimos distintos. En CHB-MIT, evaluando sobre un paciente no visto, la logística
+calibrada detecta 24 de 34 crisis con 1,1 falsas alarmas por hora.
+
+Una red convolucional sobre espectrogramas se entrena con seis optimizadores (SGD, Momentum, Nesterov, RMSprop, Adam y
+AdamW), tres tasas de aprendizaje y cinco semillas. Con la tasa elegida por validación, SGD es significativamente mejor
+(AUC de prueba $0{,}976 \pm 0{,}006$). Pero un experimento exploratorio muestra que con la tasa alta SGD, RMSprop, Adam y AdamW
+quedan empatados: pesa más la tasa que el algoritmo. El paciente de validación quedó saturado y no sirvió para elegir. En los
+pacientes de prueba, la red detecta 10 de 14 crisis con 0,19 falsas alarmas por hora, contra 6 de 14 con 0,54 de la regresión
+logística, a pesar de tener menor AUC. Para un detector de crisis, la métrica relevante es la sensibilidad con muy pocas falsas
+alarmas, no el AUC.
+
+\medskip
+\noindent\textbf{Palabras clave:} epilepsia, EEG, transformada de Fourier, convexidad, multiplicadores de Lagrange,
+Neyman-Pearson, redes convolucionales, optimizadores.

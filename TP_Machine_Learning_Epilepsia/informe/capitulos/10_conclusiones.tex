@@ -1,0 +1,183 @@
+\chapter{Discusión y conclusiones}
+\label{cap:conclusiones}
+
+\section{Discusión}
+
+La discusión sigue el recorrido del trabajo: el fenómeno, los atributos, la optimización y la evaluación. En cada punto
+se contrasta lo que predecía la teoría con lo que mostraron los datos.
+
+\subsection{El fenómeno y los atributos de Fourier}
+
+El modelo del Capítulo~\ref{cap:fenomeno} describe la crisis como una descarga rítmica, con fundamental $f_0$ y
+armónicos (ecuación~\eqref{eq:descarga}), que se suma a la actividad de fondo y queda multiplicada por una ganancia
+propia de cada paciente y canal (ecuación~\eqref{eq:modelo_eeg}). Los datos lo confirmaron en sus tres aspectos:
+\begin{itemize}
+  \item \textbf{Aumento de potencia concentrado en una banda.} En Bonn el set ictal tiene de 10 a 100 veces más potencia
+        entre 3 y 25~Hz, con máximo cerca de 6~Hz, y la banda dominante pasa a ser theta (Tabla~\ref{tab:bonn_bandas}).
+        Con solo 20 atributos de Welch, la regresión logística llega a 97,4~\% de exactitud en tres clases y el SVM con
+        núcleo RBF, a 98,4~\% (Tabla~\ref{tab:bonn_cv}).
+  \item \textbf{La banda cambia entre pacientes.} En CHB-MIT la banda con mayor aumento es delta en chb01 y chb08, y alfa y
+        beta en chb05 y chb10 (Tabla~\ref{tab:dif_log}). No hay una ``frecuencia de la crisis'' universal. Esto motiva usar
+        varias bandas como atributos y, en la red, convoluciones que se desplazan a lo largo de la frecuencia.
+  \item \textbf{La ganancia de cada paciente es un término aditivo en escala logarítmica.} Restar la mediana del paciente lo
+        elimina (ecuación~\eqref{eq:calibracion}). Con la partición fija, el AUC de la regresión logística pasa de 0,80 a
+        0,93 y las falsas alarmas, de 3,3 a 1,2 por hora (Tabla~\ref{tab:fija_convexos}). Es la mejora más grande del
+        trabajo y la produce una operación de una línea, deducida del modelo.
+\end{itemize}
+
+El modelo también tiene límites. Las tres crisis de chb03 que la red no detecta tienen un aumento de potencia por banda
+\emph{mayor} que las que sí detecta. Un detector que solo mira cuánta potencia hay las encuentra; uno que aprendió la
+\emph{forma} espectro-temporal de 13 crisis de otros tres pacientes, no. La ecuación~\eqref{eq:descarga} describe una
+descarga estacionaria, y las crisis reales evolucionan en frecuencia y en distribución espacial a lo largo de su duración
+(Figura~\ref{fig:chb01_espectrograma}).
+
+\subsection{Optimalidad local y global}
+
+La teoría del Capítulo~\ref{cap:optimizacion} se verificó numéricamente en los dos regímenes:
+\begin{itemize}
+  \item \textbf{Problema convexo.} La regresión logística regularizada es fuertemente convexa
+        (Proposición~\ref{prop:logistica_convexa}). Desde 20 puntos iniciales a distancia media 13 del óptimo, el descenso por
+        gradiente con paso $1/L$ llega al mismo valor $J^* = 0{,}07699786$ con distancia máxima $3\times10^{-7}$ entre
+        soluciones. La convergencia es lineal, con una pendiente compatible con $\kappa \approx 528$
+        (Teorema~\ref{teo:convergencia}). Todo mínimo local es global (Teorema~\ref{teo:local_global}) y una sola corrida
+        alcanza.
+  \item \textbf{Problema no convexo.} Un perceptrón de 2 neuronas termina en 8 valores distintos de la pérdida según la
+        semilla, con una diferencia de un factor 20. Con 4 neuronas todas las semillas llegan a la misma pérdida, pero con
+        pesos distintos, y en el punto medio entre dos soluciones la pérdida es 14 veces mayor: una prueba directa de no
+        convexidad.
+\end{itemize}
+
+La consecuencia práctica se vio en la CNN. Con el mismo optimizador y la misma tasa, el AUC de prueba de AdamW va de 0,873
+a 0,960 según la semilla (Tabla~\ref{tab:comparativa}). Comparar optimizadores con una corrida de cada uno habría dado
+cualquier orden. Por eso se usaron 5 semillas y una prueba no paramétrica, y aun así la potencia es limitada: con $n = 5$
+por grupo, el menor valor $p$ posible es 0,008.
+
+\subsection{Lagrange, KKT y simplex}
+
+Los multiplicadores de Lagrange aparecieron en tres lugares:
+\begin{itemize}
+  \item En el \textbf{dual del SVM}, donde las condiciones KKT se verificaron en la solución numérica (Tabla~\ref{tab:kkt_verif}).
+        Los multiplicadores clasifican los puntos en los tres casos de la holgura complementaria (Tabla~\ref{tab:svm_kkt}),
+        y la brecha de dualidad es de $1{,}6\times10^{-7}$.
+  \item En la \textbf{softmax}, cuyas salidas viven en el simplex de probabilidad (Figura~\ref{fig:bonn_simplex}): la
+        restricción $\sum_k p_k = 1$ es la que hace que el gradiente sea $\mathbf{p} - \mathbf{y}$ (ecuación~\eqref{eq:grad_ce}).
+  \item En el \textbf{umbral de Neyman-Pearson}, donde el multiplicador $\lambda$ de la restricción de falsos positivos es la
+        pendiente de la curva ROC en el punto de operación (ecuación~\eqref{eq:pendiente_roc}) y tiene una interpretación
+        concreta: cuántas crisis se ganan por cada falsa alarma adicional. En el barrido de $\alpha$ de la CNN, esa pendiente
+        va de 2 crisis por cada 0,19 falsas alarmas por hora a 1 crisis por cada 7 (Tabla~\ref{tab:barrido_alfa}).
+\end{itemize}
+La versión discreta de Neyman-Pearson es un programa lineal (ecuación~\eqref{eq:np_pl}), y el Teorema~\ref{teo:vertice}
+explica por qué su solución es un umbral determinístico salvo, a lo sumo, una ventana aleatorizada: el óptimo está en un
+vértice del poliedro factible, que es justamente lo que recorre el simplex.
+
+\subsection{La comparativa de optimizadores}
+
+El resultado principal de la comparativa no es cuál optimizador gana, sino \emph{por qué}. Con la tasa elegida por
+validación, SGD supera significativamente a Momentum, Nesterov, Adam y AdamW. Esto parecía confirmar la observación de
+\textcite{wilson2017} de que los métodos adaptativos generalizan peor. El experimento exploratorio con la tasa más alta de
+cada grilla muestra otra cosa: SGD, RMSprop, Adam y AdamW quedan entre 0,970 y 0,976, sin diferencias significativas
+(Tabla~\ref{tab:tasa_alta}). La ventaja de SGD era, sobre todo, una ventaja de la tasa de aprendizaje.
+
+Hay dos lecturas posibles y no son excluyentes:
+\begin{itemize}
+  \item \textbf{La tasa importa más que el algoritmo.} Con el paso adecuado, los seis optimizadores llegan a soluciones que
+        generalizan parecido. El análisis de la cuadrática (Proposición~\ref{prop:momentum}) muestra que el momento acelera
+        y estabiliza, pero no cambia \emph{a qué} mínimo se llega, y en un problema con muchos mínimos de pérdida parecida
+        es esto último lo que determina la generalización.
+  \item \textbf{Los pasos grandes favorecen soluciones más robustas.} Todos los optimizadores mejoraron con la tasa alta.
+        Es consistente con la idea de que el ruido de los pasos grandes evita los mínimos angostos, aunque este trabajo no
+        midió la curvatura de las soluciones y no puede confirmarlo.
+\end{itemize}
+
+Hubo además un efecto de diseño. El paciente de validación quedó saturado (AUC entre 0,996 y 0,999 para las 42 redes) y su
+AUC no predijo el de prueba ($\rho = -0{,}30$). El criterio de elección no tenía información, y la tasa elegida fue en buena
+parte azar. Esa fue la causa de que se compararan pares (optimizador, tasa) que no eran equivalentes.
+
+\subsection{Qué métrica usar}
+
+La comparación final entre la CNN y la regresión logística calibrada resume la lección del Capítulo~\ref{cap:metricas}.
+La logística tiene mayor AUC (0,934 contra 0,872), pero la red detecta 11 de 14 crisis contra 7, con falsas alarmas
+parecidas y menos de la mitad de latencia. Con una tasa de falsos positivos de $10^{-3}$, la red detecta el 54~\% de las
+ventanas ictales y la logística, el 2~\%.
+
+El AUC promedia toda la curva ROC con el mismo peso, y la mayor parte de esa curva corresponde a tasas de falsas alarmas
+(decenas o cientos por hora) que no tienen uso clínico. Con 900 ventanas por hora, la zona útil es
+$\text{FPR} \lesssim 10^{-3}$. Ahí se decide la calidad de un detector, y ahí conviene medir: sensibilidad con una tasa
+fija de falsos positivos, AUC parcial, o directamente la curva de sensibilidad por evento contra falsas alarmas por hora
+(Figura~\ref{fig:sens_fa}). La exactitud es todavía peor: un detector que nunca avisa acierta más del 99,6~\% de las ventanas.
+
+\section{Limitaciones}
+
+\begin{enumerate}
+  \item \textbf{Bonn no identifica a los pacientes.} Los 100 segmentos de cada set provienen de pocos sujetos, y la validación
+        cruzada estratificada pone segmentos del mismo paciente en entrenamiento y en prueba. Las exactitudes de 97--98~\%
+        son optimistas y no miden generalización a pacientes nuevos. Además, los segmentos se seleccionaron a mano y están
+        libres de artefactos.
+  \item \textbf{Pocos pacientes de CHB-MIT.} Se usaron 6 de los 23 pacientes de la base y 34 crisis, todos niños. La
+        evaluación final de la CNN descansa en 2 pacientes y 14 crisis, y las diferencias entre optimizadores, en 3 crisis de
+        un solo paciente (chb03\_34 a chb03\_36). Los intervalos de confianza de cualquier proporción con 14 eventos son
+        anchos: 11/14 es compatible con una sensibilidad real de entre 0,49 y 0,95 (intervalo exacto de Clopper-Pearson del
+        95~\%).
+  \item \textbf{Un solo paciente de validación.} Para la CNN se usó una partición fija y no validación cruzada por paciente,
+        por costo de cómputo. La validación quedó saturada y no sirvió para elegir la tasa ni el modelo final.
+  \item \textbf{Análisis \emph{a posteriori}.} El análisis por crisis y el experimento con la tasa alta se diseñaron después de
+        mirar la prueba. Sus conclusiones son hipótesis, no resultados confirmados, y habría que validarlas con otros
+        pacientes.
+  \item \textbf{La calibración usa el futuro.} La mediana de cada paciente de prueba se calcula sobre todo su registro. Un
+        sistema en línea tendría que estimarla con las primeras horas o con una ventana móvil. La mediana es robusta y, con
+        crisis que ocupan menos del 1~\% del tiempo, el efecto debería ser chico, pero no se midió.
+  \item \textbf{El umbral no se transfiere bien entre pacientes.} Neyman-Pearson garantiza la tasa de falsos positivos solo si
+        la distribución del puntaje sin crisis es la misma en la calibración y en el uso (Observación~\ref{obs:np_supuesto}).
+        Entre pacientes no lo es: en chb03, con $\alpha = 10^{-3}$, la tasa real fue siete veces mayor.
+  \item \textbf{Las ventanas de borde se excluyen.} Las ventanas que mezclan crisis y actividad normal no se usan en el
+        entrenamiento ni en las métricas por ventana. Las métricas por evento sí cubren el registro completo.
+  \item \textbf{Cómputo limitado.} Sin GPU, la red es chica (64\,481 parámetros), se entrena 30 épocas, la grilla de tasas tiene
+        3 valores y no se exploraron otros hiperparámetros (tamaño de lote, momento, $\beta_2$, decaimiento, programación de
+        la tasa) ni otras arquitecturas.
+\end{enumerate}
+
+\section{Trabajo futuro}
+
+\begin{itemize}
+  \item \textbf{Validación cruzada por paciente para la CNN}, tanto para elegir la tasa como para estimar el desempeño. Con
+        6 pacientes y 92~s por corrida, un LOPO anidado (5 particiones internas, 3 tasas, 6 optimizadores) son 540 corridas,
+        unas 14 horas de CPU con una semilla, o menos de una hora con GPU.
+  \item \textbf{Más pacientes de CHB-MIT}, y evaluación en otra base (por ejemplo, la de Siena o la del Hospital de la
+        Universidad de Temple) para medir generalización entre centros y equipos.
+  \item \textbf{Calibración en línea}: mediana móvil o estimada con la primera hora de registro, y un umbral adaptado al
+        paciente con un período inicial sin crisis. Atacaría directamente el problema de chb03.
+  \item \textbf{Optimizar la métrica que importa}: elegir hiperparámetros por sensibilidad con una tasa fija de falsos
+        positivos o por AUC parcial, en lugar del AUC completo.
+  \item \textbf{Entender la tasa alta}: medir la curvatura de las soluciones (autovalor máximo de la Hessiana, por iteración de
+        la potencia con productos Hessiana-vector) para ver si las redes entrenadas con paso grande están, efectivamente, en
+        mínimos más planos.
+  \item \textbf{Combinar modelos}: la logística calibrada puntúa alto justamente las tres crisis que la red no ve. Un promedio
+        de los puntajes, o usar la potencia por banda como entrada adicional de la red, podría tomar lo mejor de ambos.
+  \item \textbf{Tiempo y espacio}: modelos que miren varias ventanas seguidas (recurrentes o convoluciones temporales) y que
+        tengan en cuenta la posición de los electrodos.
+\end{itemize}
+
+\section{Conclusiones}
+
+\begin{enumerate}
+  \item La crisis epiléptica tiene una firma espectral clara: un aumento de potencia de uno a dos órdenes de magnitud en una
+        banda que depende del paciente. La transformada de Fourier y sus estimadores (Welch, espectrograma) la convierten en
+        atributos con los que un modelo lineal ya separa bien las crisis típicas.
+  \item El modelo matemático del EEG no es solo descriptivo: de él se deduce la calibración por paciente, que es la mejora más
+        grande del trabajo (AUC de 0,80 a 0,93 con la regresión logística en pacientes nuevos).
+  \item La teoría de optimización predice correctamente lo observado. En el problema convexo, todos los puntos iniciales
+        llegan al mismo óptimo con la velocidad que da el número de condición. En el no convexo, el resultado depende de la
+        semilla, lo que obliga a repetir corridas y a usar pruebas estadísticas para comparar.
+  \item Los multiplicadores de Lagrange conectan los tres problemas con restricciones del trabajo: el dual del SVM, la softmax
+        y el umbral de Neyman-Pearson. Este último, que es un programa lineal en su versión discreta, es la herramienta
+        adecuada para fijar el punto de operación de un detector con clases tan desbalanceadas.
+  \item En la comparativa de optimizadores, la tasa de aprendizaje pesó más que el algoritmo: con la tasa adecuada, SGD,
+        RMSprop, Adam y AdamW no se distinguen. Para que esa conclusión sea firme falta repetirla con validación cruzada por
+        paciente.
+  \item La red convolucional es el mejor detector en la zona clínicamente útil: con una falsa alarma cada 5 horas detecta 10 de
+        14 crisis, contra 6 de la regresión logística con casi el triple de falsas alarmas. Esto pasa a pesar de que su AUC es
+        menor y de que el protocolo eligió una de sus peores corridas.
+  \item Para un detector de crisis, la sensibilidad, la especificidad y el AUC por ventana no alcanzan. Lo que hay que informar
+        es cuántas crisis se detectan, con cuántas falsas alarmas por hora y con qué demora, sobre pacientes que el modelo no
+        vio.
+\end{enumerate}

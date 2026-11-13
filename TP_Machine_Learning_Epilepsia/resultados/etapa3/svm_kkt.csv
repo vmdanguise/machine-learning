@@ -1,0 +1,11 @@
+verificación,valor
+signo de alfa_i*y_i coincide con y_i,True
+w = sum alfa_i y_i x_i coincide con coef_,0.0
+sum alfa_i y_i (debe ser 0),-1.1102230246251565e-15
+min alfa / max alfa (entre 0 y C),0 / 1
+"alfa = 0: cantidad, min m_i (>= 1)","180, 1.0127"
+"0 < alfa < C: cantidad, m_i (= 1)","9, [1.0000, 1.0000]"
+"alfa = C: cantidad, max m_i (<= 1)","11, 0.6293"
+valor primal,11.692841
+valor dual,11.692839
+brecha de dualidad relativa,1.55e-07

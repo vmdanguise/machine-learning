@@ -1,0 +1,4 @@
+conjunto,pacientes,horas,ventanas,ictales,crisis
+entrenamiento,"chb02, chb05, chb08",94.3,84846,403,13
+validacion,chb01,40.6,36496,107,7
+prueba,"chb03, chb10",88.0,79221,201,14

@@ -1,0 +1,6 @@
+modelo,AUC_prueba,sensibilidad,especificidad,crisis,detectadas,sens_eventos,FA_por_hora,latencia_mediana_s
+logistica (global),0.7988,0.3035,0.9849,14,5,0.3571,3.2583,14.0
+svm_lineal (global),0.7976,0.3035,0.9865,14,7,0.5,2.9393,18.0
+logistica (calibrado),0.9342,0.2687,0.9941,14,7,0.5,1.219,26.0
+svm_lineal (calibrado),0.9299,0.2438,0.9946,14,6,0.4286,1.0026,24.5
+CNN AdamW,0.8719,0.6318,0.9964,14,11,0.7857,1.3557,11.0

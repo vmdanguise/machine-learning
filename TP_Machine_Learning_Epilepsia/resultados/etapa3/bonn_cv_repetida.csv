@@ -1,0 +1,4 @@
+modelo,accuracy_media,balanced_accuracy_media,f1_macro_media,accuracy_desvio,balanced_accuracy_desvio,f1_macro_desvio
+logistica,0.9744,0.9717,0.9721,0.0179,0.0219,0.0202
+svm_lineal,0.9732,0.9683,0.9697,0.0202,0.0267,0.0241
+svm_rbf,0.9844,0.981,0.9822,0.0156,0.0194,0.0182

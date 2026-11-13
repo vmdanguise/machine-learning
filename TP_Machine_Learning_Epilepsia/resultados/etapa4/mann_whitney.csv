@@ -1,0 +1,6 @@
+comparacion,U,p_valor
+SGD vs Momentum,25.0,0.0079
+SGD vs Nesterov,25.0,0.0079
+SGD vs RMSprop,21.0,0.0952
+SGD vs Adam,25.0,0.0079
+SGD vs AdamW,25.0,0.0079

@@ -1,0 +1,131 @@
+\documentclass[11pt]{article}
+\usepackage[spanish,es-nodecimaldot,es-tabla]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs,tabularx}
+\usepackage[hidelinks]{hyperref}
+\usepackage[style=apa,backend=biber]{biblatex}
+\addbibresource{referencias.bib}
+
+\newcommand{\TPR}{\mathrm{TPR}}
+\newcommand{\FPR}{\mathrm{FPR}}
+\newtheorem{hipotesis}{Hipótesis}
+\renewcommand{\thehipotesis}{H\arabic{hipotesis}}
+
+\title{Anteproyecto de trabajo final\\[0.3em]
+\large Detección de crisis epilépticas en EEG de superficie mediante análisis espectral y redes neuronales: comparación de optimizadores y funciones de activación}
+\author{Maestría en Inteligencia Artificial --- Machine Learning\\Universidad de Palermo}
+\date{Noviembre de 2026}
+
+\begin{document}
+\maketitle
+
+\section{Problema}
+
+La epilepsia afecta a unos 50 millones de personas en el mundo. El diagnóstico y el seguimiento se basan en el electroencefalograma (EEG), cuya revisión manual es lenta: un registro de 24 horas puede llevar horas de lectura de un especialista. Un detector automático de crisis tiene que ser \emph{sensible} (no perder crisis) y, a la vez, \emph{específico} (generar pocas falsas alarmas por hora), dos objetivos en conflicto.
+
+El trabajo aborda la detección de crisis como un problema de clasificación binaria de ventanas de EEG de 4 segundos, con un fuerte desbalance de clases (las crisis ocupan menos del 1~\% del tiempo registrado).
+
+\section{Objetivos}
+
+\paragraph{General.} Construir y evaluar un detector de crisis epilépticas basado en características espectrales del EEG y redes neuronales, y estudiar de forma controlada cómo influyen el optimizador y la función de activación en el entrenamiento y en el rendimiento.
+
+\paragraph{Específicos.}
+\begin{enumerate}
+  \item Modelar matemáticamente la señal EEG y fundamentar, con la transformada de Fourier, las características espectrales que distinguen una crisis.
+  \item Demostrar que la entropía espectral alcanza su máximo global en la distribución uniforme del simplex (multiplicadores de Lagrange) y verificar empíricamente que disminuye durante las crisis.
+  \item Comparar seis optimizadores (SGD, SGD con momento de Nesterov, RMSProp, Adam, AdamW y L-BFGS) en un problema convexo (regresión logística) y en uno no convexo (perceptrón multicapa), incluyendo el método del simplex de Nelder-Mead como referencia sin derivadas.
+  \item Comparar cinco funciones de activación (sigmoide, tanh, ReLU, Leaky ReLU y GELU) y su interacción con el optimizador y con la profundidad de la red.
+  \item Evaluar el detector con curva ROC, AUC, matriz de confusión, sensibilidad y especificidad, y elegir el umbral de decisión como un problema de optimización con restricciones (criterio de Neyman-Pearson).
+  \item Controlar el sobreajuste mediante partición por paciente, regularización y \emph{early stopping}.
+\end{enumerate}
+
+\section{Hipótesis}
+
+\begin{hipotesis}
+En la regresión logística regularizada (problema estrictamente convexo) todos los optimizadores convergen al mismo óptimo global; solo difieren en la velocidad.
+\end{hipotesis}
+\begin{hipotesis}
+En el perceptrón multicapa (problema no convexo) la variabilidad del resultado entre inicializaciones es significativamente mayor que en el caso convexo, como consecuencia de la existencia de múltiples mínimos locales.
+\end{hipotesis}
+\begin{hipotesis}
+Al aumentar la profundidad, las redes con activaciones saturantes (sigmoide y tanh) se degradan más que las de la familia ReLU y GELU, por desvanecimiento del gradiente.
+\end{hipotesis}
+\begin{hipotesis}
+Los optimizadores adaptativos (RMSProp, Adam) son menos sensibles a la elección de la función de activación que SGD.
+\end{hipotesis}
+\begin{hipotesis}
+La entropía espectral del EEG es significativamente menor durante las crisis que fuera de ellas.
+\end{hipotesis}
+
+\section{Datos}
+
+Se usará la base pública \emph{CHB-MIT Scalp EEG Database} \parencite{shoeb2009,goldberger2000}, disponible en PhysioNet: registros de EEG de superficie de 23 casos pediátricos (22 sujetos) del Children's Hospital Boston, muestreados a 256~Hz en montaje bipolar del sistema 10-20, con 198 crisis anotadas por especialistas. Se utilizarán los 18 canales comunes a todos los registros, todos los archivos con crisis y una muestra aleatoria de archivos sin crisis (alrededor de 14~GB).
+
+\section{Metodología}
+
+\begin{enumerate}
+  \item \textbf{Preprocesamiento:} filtro pasabanda de 0,5 a 45~Hz, filtro \emph{notch} en 60~Hz y segmentación en ventanas de 4~s.
+  \item \textbf{Características espectrales} (método de Welch, \cite{welch1967}): potencia absoluta y relativa en las bandas $\delta,\theta,\alpha,\beta,\gamma$, entropía espectral, frecuencia dominante, frecuencia de borde espectral y coherencia entre canales.
+  \item \textbf{Partición por sujeto:} entrenamiento, validación y prueba con pacientes disjuntos (los casos \texttt{chb01} y \texttt{chb21}, que son la misma paciente, siempre juntos).
+  \item \textbf{Modelos:} regresión logística (convexa) y perceptrón multicapa (no convexo), con entropía cruzada ponderada por clase.
+  \item \textbf{Diseño experimental:}
+  \begin{itemize}
+    \item Ajuste de la tasa de aprendizaje de cada optimizador con igual presupuesto.
+    \item Grilla optimizador $\times$ activación $\times$ semilla: $6 \times 5 \times 5 = 150$ entrenamientos.
+    \item Profundidad (2, 4 y 8 capas) $\times$ activación, registrando la norma del gradiente por capa y la fracción de unidades inactivas.
+    \item Pruebas estadísticas: Friedman, Wilcoxon con corrección de Holm y ANOVA de dos factores \parencite{demsar2006}.
+  \end{itemize}
+  \item \textbf{Evaluación:} curva ROC, AUC, curva precisión-recall, matriz de confusión, sensibilidad, especificidad, falsas alarmas por hora y sensibilidad por evento (crisis detectadas).
+\end{enumerate}
+
+\section{Fundamentación matemática}
+
+\begin{itemize}
+  \item \textbf{Transformada de Fourier:} DFT, teorema de Parseval, ventaneo y fuga espectral, estimador de Welch, coherencia espectral \parencite{oppenheim2010,gonzalez2018}.
+  \item \textbf{Simplex y Lagrange:} el espectro normalizado $p$ es un punto del simplex $\Delta^{N-1}$. Con el lagrangiano $\mathcal{L}(p,\lambda) = -\sum_i p_i\log p_i + \lambda(\sum_i p_i - 1)$ se demuestra que el máximo de la entropía es $\log N$ en $p_i = 1/N$, y que por la concavidad estricta de $H$ es el óptimo global y único.
+  \item \textbf{Optimalidad local y global:} convexidad de la pérdida logística regularizada (Hessiano definido positivo) frente a la no convexidad de las redes; condiciones de primer y segundo orden; métodos de gradiente, momento, adaptativos, cuasi-Newton y Nelder-Mead \parencite{boyd2004,nocedal2006,nelder1965}.
+  \item \textbf{Funciones de activación:} teorema de aproximación universal \parencite{cybenko1989,leshno1993}, análisis del gradiente por la regla de la cadena e inicializaciones de Glorot y He \parencite{glorot2010,he2015}.
+  \item \textbf{Decisión con restricciones:} $\max_t \TPR(t)$ sujeto a $\FPR(t) \le \alpha$. El multiplicador de Lagrange óptimo es la pendiente de la ROC en el punto de operación, y coincide con el umbral sobre el cociente de verosimilitudes del lema de Neyman-Pearson \parencite{neyman1933,fawcett2006}. Se fijará $\alpha$ equivalente a una falsa alarma por hora.
+\end{itemize}
+
+\section{Herramientas}
+
+Python con NumPy, SciPy, scikit-learn, PyTorch y statsmodels. El trabajo completo se entrega como un notebook de Jupyter, ejecutable también en Google Colab, apoyado en módulos \texttt{.py}. El documento se redacta en \LaTeX{} (Overleaf), con una versión equivalente en Word.
+
+\section{Cronograma}
+
+\begin{tabularx}{\linewidth}{@{}lXX@{}}
+\toprule
+Semana & Desarrollo & Escritura \\
+\midrule
+1 (12--18/11) & Descarga, preprocesamiento, características, verificación de H5 & Caps.~2 y 3 \\
+2 (19--25/11) & Caso convexo, ajuste de tasas, pipeline de evaluación & Caps.~4 y 7 \\
+3 (26/11--2/12) & Grilla optimizador $\times$ activación, experimento de profundidad & Caps.~5 y 6 \\
+4 (3--9/12) & Pruebas estadísticas, figuras finales & Caps.~8, 9 y 10 \\
+10--12/12 & Revisión & Revisión y formato \\
+\bottomrule
+\end{tabularx}
+
+\section{Índice tentativo}
+
+\begin{enumerate}
+  \item Introducción
+  \item La señal EEG y su modelo matemático
+  \item Análisis de Fourier y características espectrales
+  \item Aprendizaje estadístico y sobreajuste
+  \item Modelos y funciones de activación
+  \item Optimización
+  \item Evaluación de clasificadores
+  \item Metodología experimental
+  \item Resultados
+  \item Discusión y conclusiones
+\end{enumerate}
+
+\nocite{bishop2024,goodfellow2016,duda2001,buduma2022}
+\printbibliography[title={Bibliografía}]
+
+\end{document}

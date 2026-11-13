@@ -1,0 +1,9 @@
+variante,modelo,regla,AUC,AUC_desvio,sens_ventana,espec_ventana,crisis,detectadas,falsas_alarmas,latencia_mediana_s,sens_eventos,FA_por_hora
+calibrado,logistica,cero,0.9493,0.0599,0.7792,0.9549,34,34,2443,12.5,1.0,11.0043
+calibrado,logistica,neyman_pearson,0.9493,0.0599,0.3343,0.9937,34,24,254,25.25,0.7059,1.1441
+calibrado,svm_lineal,cero,0.9479,0.0592,0.7721,0.9532,34,34,2508,12.5,1.0,11.2971
+calibrado,svm_lineal,neyman_pearson,0.9479,0.0592,0.3337,0.9937,34,24,266,22.25,0.7059,1.1982
+global,logistica,cero,0.9462,0.0561,0.627,0.893,34,28,3802,12.25,0.8235,17.1259
+global,logistica,neyman_pearson,0.9462,0.0561,0.363,0.9939,34,23,466,20.0,0.6765,2.0991
+global,svm_lineal,cero,0.944,0.0544,0.6246,0.8899,34,28,3825,12.25,0.8235,17.2295
+global,svm_lineal,neyman_pearson,0.944,0.0544,0.3519,0.9937,34,24,484,20.0,0.7059,2.1801

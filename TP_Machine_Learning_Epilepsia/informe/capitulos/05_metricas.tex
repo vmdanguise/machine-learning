@@ -1,0 +1,236 @@
+\chapter{Métricas de evaluación}
+\label{cap:metricas}
+
+Un detector de crisis produce, para cada ventana, un puntaje $s(\vx)$ y una decisión
+$\hat y = \mathds{1}[s(\vx) > \tau]$. Este capítulo define cómo se mide su desempeño: primero por ventana
+(matriz de confusión, sensibilidad, especificidad, curva ROC), después por evento, que es lo que importa en la
+clínica (crisis detectadas, falsas alarmas por hora, latencia), y finalmente cómo se comparan modelos entre sí con
+tests estadísticos. Las definiciones son las que implementa \texttt{scripts/metricas.py}.
+
+\section{Matriz de confusión}
+
+Para un problema binario, con la clase positiva ``crisis'', cada ventana cae en una de cuatro celdas:
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+ & predicho: sin crisis & predicho: crisis \\
+\midrule
+real: sin crisis & $TN$ (verdadero negativo) & $FP$ (falso positivo) \\
+real: crisis     & $FN$ (falso negativo)    & $TP$ (verdadero positivo) \\
+\bottomrule
+\end{tabular}
+\end{center}
+Con $n_1 = TP + FN$ positivos y $n_0 = TN + FP$ negativos. Todas las métricas por ventana son cocientes entre estas
+cuatro cantidades. En el problema de $K$ clases (Bonn) la matriz es de $K \times K$: la entrada $(i,j)$ cuenta los
+ejemplos de clase real $i$ predichos como $j$, y la diagonal son los aciertos.
+
+\section{Sensibilidad, especificidad y valor predictivo}
+
+\begin{align}
+  \text{sensibilidad} &= \frac{TP}{TP + FN} = P(\hat y = 1 \mid y = 1) && \text{(tasa de verdaderos positivos, TPR)} \\
+  \text{especificidad} &= \frac{TN}{TN + FP} = P(\hat y = 0 \mid y = 0) && \text{(igual a $1 - $ FPR, tasa de falsos positivos)} \\
+  \text{VPP} &= \frac{TP}{TP + FP} = P(y = 1 \mid \hat y = 1) && \text{(valor predictivo positivo, precisión)} \\
+  F_1 &= \frac{2\,\text{VPP}\cdot\text{sensibilidad}}{\text{VPP} + \text{sensibilidad}}
+\end{align}
+
+La sensibilidad y la especificidad están condicionadas a la clase \emph{real}, de modo que no dependen de la proporción
+de positivos: son propiedades del detector. El VPP está condicionado a la \emph{decisión} y sí depende de esa
+proporción. Por la regla de Bayes, con prevalencia $\pi_1$,
+\begin{equation}
+  \text{VPP} = \frac{\text{sens}\cdot\pi_1}{\text{sens}\cdot\pi_1 + (1 - \text{espec})\,(1 - \pi_1)}.
+  \label{eq:vpp_bayes}
+\end{equation}
+Con $\pi_1 = 0{,}0025$ (proporción de ventanas ictales en los pacientes de prueba), sensibilidad 0,63 y
+especificidad 0,9964 (los valores de la CNN final), el VPP es apenas 0,31: \emph{de cada tres alarmas por ventana,
+dos son falsas}, aunque la especificidad parezca altísima.
+
+En el caso de $K$ clases se calcula la sensibilidad y la especificidad de cada clase contra el resto (\emph{uno contra
+todos}): para la clase $k$, $TP_k$ son los ejemplos de clase $k$ predichos como $k$, y así sucesivamente.
+
+\subsection{Por qué la exactitud no sirve}
+\label{sec:accuracy}
+
+La exactitud, $(TP + TN)/(n_0 + n_1)$, es un promedio de la sensibilidad y la especificidad ponderado por la
+prevalencia:
+\begin{equation}
+  \text{exactitud} = \pi_1\cdot\text{sensibilidad} + (1 - \pi_1)\cdot\text{especificidad}.
+\end{equation}
+Con $\pi_1 \approx 0{,}0025$, la sensibilidad casi no pesa. Un ejemplo concreto con los pacientes de prueba (201 ventanas
+ictales y 78\,998 sin crisis):
+\begin{itemize}
+  \item un ``detector'' que \emph{nunca} declara crisis tiene exactitud $78\,998/79\,199 = 99{,}75~\%$;
+  \item la CNN final, que detecta 11 de las 14 crisis, tiene exactitud $99{,}55~\%$.
+\end{itemize}
+El detector inútil le gana en exactitud al útil. Por eso en este trabajo la exactitud solo se informa en Bonn, donde
+las clases están balanceadas (200, 200 y 100 segmentos), junto con la exactitud balanceada (promedio de las
+sensibilidades de cada clase) y el $F_1$ macro.
+
+\section{Curva ROC}
+\label{sec:roc}
+
+Las métricas anteriores dependen del umbral $\tau$. La curva ROC (\emph{receiver operating characteristic}) muestra
+todos los umbrales a la vez \parencite{fawcett2006}:
+\begin{equation}
+  \text{ROC} = \Big\{\big(\text{FPR}(\tau),\ \text{TPR}(\tau)\big) : \tau \in \R\Big\},
+  \qquad
+  \text{FPR}(\tau) = P(s > \tau \mid y = 0),\quad \text{TPR}(\tau) = P(s > \tau \mid y = 1).
+\end{equation}
+Cuando $\tau$ baja desde $+\infty$ hasta $-\infty$, la curva va de $(0,0)$ (nunca detectar) a $(1,1)$ (detectar
+siempre). Propiedades que se usan en el trabajo:
+\begin{itemize}
+  \item \textbf{Invariancia ante transformaciones crecientes.} Si $g$ es estrictamente creciente, $g(s)$ tiene la misma
+        curva ROC que $s$. En particular da igual usar la probabilidad de la sigmoide o el puntaje antes de ella, y
+        la curva no cambia por el peso de las clases en el entrenamiento, que solo desplaza los puntajes.
+  \item \textbf{Independencia de la prevalencia.} Ambos ejes están condicionados a la clase real.
+  \item \textbf{La diagonal} $\text{TPR} = \text{FPR}$ corresponde a decidir al azar. Una curva por debajo indica un puntaje
+        con el signo invertido.
+  \item \textbf{La pendiente} en cada punto es la razón de verosimilitud del puntaje,
+        $q_1(\tau)/q_0(\tau)$ (ecuación~\eqref{eq:pendiente_roc}). Si el puntaje es una función creciente de la razón de
+        verosimilitud, la curva es cóncava.
+\end{itemize}
+
+\subsection{Área bajo la curva}
+
+El área bajo la curva (AUC) resume la curva en un número. Su interpretación probabilística es la más útil.
+
+\begin{proposicion}
+\label{prop:auc}
+Sean $\vx^+$ un positivo y $\vx^-$ un negativo elegidos al azar e independientes. Si el puntaje es continuo,
+\begin{equation}
+  \text{AUC} = \int_0^1 \text{TPR}\,d(\text{FPR}) = P\big(s(\vx^+) > s(\vx^-)\big).
+\end{equation}
+\end{proposicion}
+\begin{proof}
+Sea $q_0$ la densidad del puntaje en los negativos. Parametrizando la curva por el umbral,
+$d(\text{FPR}) = -q_0(\tau)\,d\tau$, y al recorrer FPR de 0 a 1 el umbral va de $+\infty$ a $-\infty$:
+\[
+  \text{AUC} = \int_{-\infty}^{\infty} \text{TPR}(\tau)\,q_0(\tau)\,d\tau
+  = \int_{-\infty}^{\infty} P(s^+ > \tau)\,q_0(\tau)\,d\tau
+  = P(s^+ > s^-),
+\]
+porque la última integral es la probabilidad de que $s^+$ supere a un $s^-$ con densidad $q_0$.
+\end{proof}
+
+Con datos, la versión empírica es la proporción de pares (positivo, negativo) bien ordenados, contando los empates
+como medio:
+\begin{equation}
+  \widehat{\text{AUC}} = \frac{1}{n_0 n_1}\sum_{i:\,y_i = 1}\ \sum_{j:\,y_j = 0}
+  \Big(\mathds{1}[s_i > s_j] + \tfrac12\mathds{1}[s_i = s_j]\Big) = \frac{U}{n_0 n_1},
+  \label{eq:auc_mw}
+\end{equation}
+donde $U$ es el estadístico de Mann-Whitney. Un AUC de 0,5 es azar y 1 es separación perfecta. Para $K$ clases se
+informa el AUC de cada clase contra el resto.
+
+\subsection{La zona útil de la curva}
+\label{sec:zona_util}
+
+El AUC promedia sobre \emph{todos} los valores de FPR con el mismo peso, pero en un monitor de crisis solo interesa
+una parte mínima de la curva. Con ventanas de 4 s hay 900 ventanas por hora; un FPR de 1~\% son 9 ventanas falsas por
+hora, y uno de 5~\%, 45. El punto de operación razonable está en $\text{FPR} \lesssim 10^{-3}$, el 0,1~\% izquierdo
+del eje. Dos detectores con el mismo AUC pueden ser muy distintos en esa zona: en el Capítulo~\ref{cap:convexos},
+el paciente chb03 tiene AUC 0,95 con la regresión logística pero casi no detecta nada con menos de 1~\% de falsos
+positivos. Por eso las curvas ROC de CHB-MIT se grafican con el eje horizontal en escala logarítmica (o simétrica
+logarítmica, lineal cerca de cero) y, además del AUC, se informa la sensibilidad para un FPR fijo de $10^{-3}$.
+
+\section{Métricas por evento}
+\label{sec:eventos}
+
+Al médico no le importa cuántas ventanas de 4 s se clasificaron bien, sino si se detectó cada crisis, cuántas veces
+sonó la alarma sin motivo y con cuánto retraso. Las métricas por evento responden esas preguntas.
+
+\subsection{Post-procesamiento: suavizado causal}
+
+Antes de umbralizar, el puntaje de cada ventana se reemplaza por el promedio de las últimas $k = 3$ ventanas del mismo
+registro (12 s):
+\begin{equation}
+  \tilde s_t = \frac{1}{\min(k, t)}\sum_{u = \max(1, t-k+1)}^{t} s_u.
+\end{equation}
+El filtro es \emph{causal}: solo usa el pasado, así que podría aplicarse en tiempo real. Una crisis dura en general
+más de 12 s y produce puntajes altos sostenidos, mientras que muchos artefactos afectan una sola ventana; el promedio
+atenúa estos últimos. El costo es un retardo de hasta dos ventanas en la detección.
+
+\subsection{Definiciones}
+
+Sean $[a_j, b_j]$ las crisis anotadas y $\hat y_t$ las decisiones por ventana después del suavizado.
+\begin{itemize}
+  \item \textbf{Crisis detectada:} al menos una ventana positiva se superpone con $[a_j, b_j]$.
+  \item \textbf{Sensibilidad por evento:} crisis detectadas sobre crisis totales.
+  \item \textbf{Alarma:} una racha de ventanas positivas consecutivas cuenta como una sola alarma. Es \emph{falsa} si no
+        se superpone con ninguna crisis.
+  \item \textbf{Falsas alarmas por hora (FA/h):} alarmas falsas dividido por las horas de registro fuera de las crisis.
+  \item \textbf{Latencia:} desde el inicio anotado $a_j$ hasta el \emph{final} de la primera ventana positiva (la decisión
+        sobre una ventana recién se puede tomar cuando termina). Se informa la mediana sobre las crisis detectadas.
+\end{itemize}
+Las ventanas de \emph{borde} (que tocan una crisis solo en parte) no se usan para entrenar ni para las métricas por
+ventana, porque su etiqueta es ambigua; sí se usan en las métricas por evento, que trabajan sobre el registro completo.
+
+\paragraph{Relación con las métricas por ventana.} Si las ventanas falsas fueran independientes, con tasa FPR, el
+número esperado de alarmas falsas por hora sería como máximo $900\cdot\text{FPR}$; agruparlas en rachas lo reduce. En la
+CNN final, las 282 ventanas falsas positivas de los pacientes de prueba (87,8 horas sin crisis) se agrupan en 119
+alarmas: 3,2 ventanas falsas por hora, pero 1,36 alarmas falsas por hora.
+
+\subsection{El compromiso clínico}
+
+Las tres métricas por evento se mueven juntas con el umbral: bajarlo aumenta la sensibilidad por evento y reduce la
+latencia, pero aumenta las FA/h. La curva de sensibilidad por evento en función de FA/h, que se obtiene variando
+$\alpha$ en el umbral de Neyman-Pearson, es la versión clínica de la curva ROC y se presenta en el
+Capítulo~\ref{cap:resultados}. Como referencia, en la literatura de detección específica por paciente con CHB-MIT
+\parencite{shoeb2009} se reportan del orden de 96~\% de crisis detectadas con unas 2 falsas alarmas por día; en
+detección para pacientes nuevos, sin entrenar con datos del paciente, el problema es mucho más difícil.
+
+\section{Umbral de Neyman-Pearson}
+\label{sec:umbral_np}
+
+El umbral no se elige maximizando la exactitud ni el $F_1$, sino fijando de antemano la tasa de falsos positivos por
+ventana tolerable, $\alpha$, y maximizando la sensibilidad bajo esa restricción. En la Sección~\ref{sec:neyman_pearson}
+se demostró, con multiplicadores de Lagrange, que la solución es comparar el puntaje con el cuantil $1 - \alpha$ de su
+distribución en la clase negativa. En la práctica:
+\begin{enumerate}
+  \item se calcula el puntaje suavizado de todas las ventanas sin crisis de un conjunto de calibración que \emph{no} se
+        usa para evaluar (los pacientes de entrenamiento en LOPO; el de validación en la partición fija);
+  \item se toma $\tau = $ cuantil empírico $1 - \alpha$ de esos puntajes, ecuación~\eqref{eq:umbral_np};
+  \item se aplica ese $\tau$, sin cambios, a los pacientes de prueba.
+\end{enumerate}
+Se usa $\alpha = 10^{-3}$ (del orden de una ventana falsa por hora). En el Capítulo~\ref{cap:resultados} se muestra
+el barrido de $\alpha$ entre $3\times10^{-5}$ y $3\times10^{-2}$.
+
+\section{Esquemas de validación}
+\label{sec:validacion}
+
+Una métrica solo tiene sentido si se mide sobre datos que el modelo no usó para entrenar ni para elegir
+hiperparámetros. En EEG hay una trampa adicional: ventanas del mismo paciente, e incluso consecutivas, son muy
+parecidas entre sí. Si se mezclan al azar en entrenamiento y prueba, el modelo puede aprender a reconocer al
+paciente o al registro, y las métricas sobrestiman lo que pasaría con un paciente nuevo.
+\begin{itemize}
+  \item \textbf{Validación cruzada estratificada (Bonn).} Se divide en 10 partes con la misma proporción de clases,
+        se entrena con 9 y se evalúa con la restante, rotando; se repite 5 veces con distinto orden. Como Bonn no
+        informa a qué paciente pertenece cada segmento, no se puede separar por paciente: las métricas de Bonn son
+        optimistas.
+  \item \textbf{Dejar un paciente fuera (LOPO, CHB-MIT).} Se entrena con 5 pacientes y se evalúa con el sexto,
+        rotando los 6. Mide la generalización a un paciente que el modelo nunca vio.
+  \item \textbf{Partición fija (CHB-MIT).} Para la CNN, que tarda en entrenarse, se usa una sola partición por paciente:
+        entrenamiento chb02, chb05 y chb08; validación chb01 (elección de tasa de aprendizaje, época y umbral); prueba
+        chb03 y chb10, que se miran una sola vez al final. Los modelos convexos se evalúan también con esta partición
+        para compararlos con la CNN.
+\end{itemize}
+
+\section{Comparación estadística entre modelos}
+\label{sec:tests}
+
+La CNN se entrena con varias semillas, y el resultado cambia de una a otra. Para decir que un optimizador es mejor que
+otro no alcanza con comparar promedios: hay que ver si la diferencia es mayor que la variabilidad entre semillas.
+
+\paragraph{Test de Mann-Whitney.} Dadas dos muestras independientes $a_1,\dots,a_{m}$ y $b_1,\dots,b_{m'}$ (por ejemplo,
+el AUC de prueba de 5 semillas de cada optimizador), el estadístico $U$ cuenta los pares con $a_i > b_j$, igual que
+en~\eqref{eq:auc_mw}. Bajo la hipótesis nula de que las dos muestras vienen de la misma distribución, todos los órdenes
+son igualmente probables y la distribución de $U$ se calcula exactamente. Es un test no paramétrico: no supone
+normalidad, algo razonable con 5 valores por grupo. Con $m = m' = 5$, el menor $p$ bilateral posible es
+$2/\binom{10}{5} = 0{,}0079$, que se obtiene cuando las 5 semillas de un grupo superan a las 5 del otro ($U = 25$).
+
+\paragraph{Comparaciones múltiples.} Al comparar un optimizador contra otros cinco se hacen cinco tests, y la
+probabilidad de al menos un falso positivo crece. La corrección de Bonferroni exige $p < 0{,}05/5 = 0{,}01$ para cada
+comparación.
+
+\paragraph{Correlación de Spearman.} Para saber si el desempeño en validación predice el de prueba se usa la correlación
+de Spearman $\rho$: la correlación de Pearson entre los rangos. Mide asociación monótona, no necesariamente lineal, y
+es robusta a valores extremos.

@@ -1,0 +1,20 @@
+{
+  "bonn": {
+    "atributos": "log10 potencia Welch en 20 bandas de 2 Hz (0,5-40 Hz)",
+    "cv": "10 particiones x 5 repeticiones"
+  },
+  "chbmit": {
+    "atributos": "log10 potencia 18 canales x 5 bandas",
+    "alfa_neyman_pearson": 0.001,
+    "suavizado_ventanas": 3,
+    "logistica_C": 0.1,
+    "svm_lineal_C": 0.01,
+    "class_weight": "balanced"
+  },
+  "optimalidad": {
+    "lambda": 0.01,
+    "L": 4.297620687810133,
+    "iteraciones": 20000,
+    "inicios": 20
+  }
+}

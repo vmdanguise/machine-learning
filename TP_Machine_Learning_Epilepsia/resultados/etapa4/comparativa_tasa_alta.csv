@@ -1,0 +1,7 @@
+optimizador,lr,semillas,auc_val_media,auc_prueba_media,auc_prueba_desvio,auc_prueba_min,auc_prueba_tasa_elegida
+SGD,0.3,5,0.9982,0.9758,0.0063,0.9657,0.9758
+Momentum,0.03,5,0.9979,0.9596,0.0067,0.9499,0.9191
+Nesterov,0.03,5,0.9987,0.9501,0.0285,0.9047,0.9196
+RMSprop,0.003,5,0.9976,0.973,0.0132,0.9516,0.9562
+Adam,0.003,5,0.9984,0.9712,0.0091,0.957,0.9171
+AdamW,0.003,5,0.9975,0.9699,0.0076,0.9619,0.9225

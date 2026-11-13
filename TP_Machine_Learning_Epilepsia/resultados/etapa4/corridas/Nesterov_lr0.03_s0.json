@@ -1,0 +1,255 @@
+{
+ "optimizador": "Nesterov",
+ "lr": 0.03,
+ "semilla": 0,
+ "epocas": 30,
+ "historia": [
+  {
+   "epoca": 1,
+   "perdida_entrenamiento": 0.18084806076117924,
+   "norma_grad": 0.6935843412365232,
+   "perdida_val": 0.05435425043106079,
+   "auc_val": 0.9855420560747663,
+   "segundos": 2.9231574535369873
+  },
+  {
+   "epoca": 2,
+   "perdida_entrenamiento": 0.0721922277073775,
+   "norma_grad": 0.5169893826757158,
+   "perdida_val": 0.0808744952082634,
+   "auc_val": 0.9941214953271028,
+   "segundos": 5.86883020401001
+  },
+  {
+   "epoca": 3,
+   "perdida_entrenamiento": 0.059407368222517624,
+   "norma_grad": 0.5817458822258881,
+   "perdida_val": 0.043587688356637955,
+   "auc_val": 0.9933140186915889,
+   "segundos": 8.80718469619751
+  },
+  {
+   "epoca": 4,
+   "perdida_entrenamiento": 0.047250702158947076,
+   "norma_grad": 0.5099577491836889,
+   "perdida_val": 0.06163845583796501,
+   "auc_val": 0.8846158878504673,
+   "segundos": 11.723031282424927
+  },
+  {
+   "epoca": 5,
+   "perdida_entrenamiento": 0.051123915413128475,
+   "norma_grad": 0.5598651703979288,
+   "perdida_val": 0.07401066273450851,
+   "auc_val": 0.990988785046729,
+   "segundos": 14.67565107345581
+  },
+  {
+   "epoca": 6,
+   "perdida_entrenamiento": 0.04154513003304601,
+   "norma_grad": 0.42020750577960697,
+   "perdida_val": 0.07056303322315216,
+   "auc_val": 0.9751616822429907,
+   "segundos": 17.547922372817993
+  },
+  {
+   "epoca": 7,
+   "perdida_entrenamiento": 0.03150511188432574,
+   "norma_grad": 0.3638737111751522,
+   "perdida_val": 0.16012193262577057,
+   "auc_val": 0.9826803738317758,
+   "segundos": 20.509785652160645
+  },
+  {
+   "epoca": 8,
+   "perdida_entrenamiento": 0.03723104264853256,
+   "norma_grad": 0.4316937601992062,
+   "perdida_val": 0.057588208466768265,
+   "auc_val": 0.9949009345794393,
+   "segundos": 23.45765256881714
+  },
+  {
+   "epoca": 9,
+   "perdida_entrenamiento": 0.021661488893109242,
+   "norma_grad": 0.2608378004016621,
+   "perdida_val": 0.033484745770692825,
+   "auc_val": 0.9966065420560748,
+   "segundos": 26.41740345954895
+  },
+  {
+   "epoca": 10,
+   "perdida_entrenamiento": 0.019540103528249475,
+   "norma_grad": 0.2807565338377442,
+   "perdida_val": 0.035219475626945496,
+   "auc_val": 0.9910467289719626,
+   "segundos": 29.354917287826538
+  },
+  {
+   "epoca": 11,
+   "perdida_entrenamiento": 0.028230006114712783,
+   "norma_grad": 0.35121427034693103,
+   "perdida_val": 0.02922409027814865,
+   "auc_val": 0.9973476635514019,
+   "segundos": 32.24612832069397
+  },
+  {
+   "epoca": 12,
+   "perdida_entrenamiento": 0.019123393709638288,
+   "norma_grad": 0.28035546601084727,
+   "perdida_val": 0.02406393364071846,
+   "auc_val": 0.9979233644859814,
+   "segundos": 35.2168345451355
+  },
+  {
+   "epoca": 13,
+   "perdida_entrenamiento": 0.0165394106696892,
+   "norma_grad": 0.21563335691711732,
+   "perdida_val": 0.04182315617799759,
+   "auc_val": 0.9978401869158878,
+   "segundos": 38.17681407928467
+  },
+  {
+   "epoca": 14,
+   "perdida_entrenamiento": 0.01448157362506858,
+   "norma_grad": 0.25408445784289924,
+   "perdida_val": 0.025399133563041687,
+   "auc_val": 0.9982121495327103,
+   "segundos": 41.108609676361084
+  },
+  {
+   "epoca": 15,
+   "perdida_entrenamiento": 0.023173284846624093,
+   "norma_grad": 0.3839636235630938,
+   "perdida_val": 0.02509697526693344,
+   "auc_val": 0.9913467289719626,
+   "segundos": 44.0544970035553
+  },
+  {
+   "epoca": 16,
+   "perdida_entrenamiento": 0.017934093135409057,
+   "norma_grad": 0.30882157107282965,
+   "perdida_val": 0.009759954176843166,
+   "auc_val": 0.9987897196261682,
+   "segundos": 47.05241060256958
+  },
+  {
+   "epoca": 17,
+   "perdida_entrenamiento": 0.011576884921773204,
+   "norma_grad": 0.1940678025994982,
+   "perdida_val": 0.025458555668592453,
+   "auc_val": 0.9968467289719626,
+   "segundos": 50.0603506565094
+  },
+  {
+   "epoca": 18,
+   "perdida_entrenamiento": 0.012516795862133482,
+   "norma_grad": 0.2114205252113087,
+   "perdida_val": 0.029634516686201096,
+   "auc_val": 0.9974682242990655,
+   "segundos": 53.0530788898468
+  },
+  {
+   "epoca": 19,
+   "perdida_entrenamiento": 0.018763778554109323,
+   "norma_grad": 0.3038465651151325,
+   "perdida_val": 0.0204133540391922,
+   "auc_val": 0.9910841121495327,
+   "segundos": 55.98494815826416
+  },
+  {
+   "epoca": 20,
+   "perdida_entrenamiento": 0.01589098711265251,
+   "norma_grad": 0.3030231942821826,
+   "perdida_val": 0.17301182448863983,
+   "auc_val": 0.9747570093457942,
+   "segundos": 58.95039916038513
+  },
+  {
+   "epoca": 21,
+   "perdida_entrenamiento": 0.014334382070228458,
+   "norma_grad": 0.25738215669989584,
+   "perdida_val": 0.04367053881287575,
+   "auc_val": 0.9905429906542056,
+   "segundos": 61.8390736579895
+  },
+  {
+   "epoca": 22,
+   "perdida_entrenamiento": 0.009729330155200193,
+   "norma_grad": 0.22683763529307077,
+   "perdida_val": 0.024309542030096054,
+   "auc_val": 0.9966345794392523,
+   "segundos": 64.79595351219177
+  },
+  {
+   "epoca": 23,
+   "perdida_entrenamiento": 0.011911804105953447,
+   "norma_grad": 0.2230743275157043,
+   "perdida_val": 0.020480552688241005,
+   "auc_val": 0.9783719626168225,
+   "segundos": 67.66572833061218
+  },
+  {
+   "epoca": 24,
+   "perdida_entrenamiento": 0.012853008780179411,
+   "norma_grad": 0.2761956373495715,
+   "perdida_val": 0.01645013503730297,
+   "auc_val": 0.9985018691588785,
+   "segundos": 70.57737064361572
+  },
+  {
+   "epoca": 25,
+   "perdida_entrenamiento": 0.013885185671512902,
+   "norma_grad": 0.28037467867668187,
+   "perdida_val": 0.07784062623977661,
+   "auc_val": 0.998392523364486,
+   "segundos": 73.52145028114319
+  },
+  {
+   "epoca": 26,
+   "perdida_entrenamiento": 0.014119449556372794,
+   "norma_grad": 0.273916621679174,
+   "perdida_val": 0.1554793268442154,
+   "auc_val": 0.9843588785046729,
+   "segundos": 76.47782683372498
+  },
+  {
+   "epoca": 27,
+   "perdida_entrenamiento": 0.01218687190973599,
+   "norma_grad": 0.2006336505125676,
+   "perdida_val": 0.03818485885858536,
+   "auc_val": 0.9946224299065421,
+   "segundos": 79.78063917160034
+  },
+  {
+   "epoca": 28,
+   "perdida_entrenamiento": 0.008155536324816888,
+   "norma_grad": 0.1624226572723793,
+   "perdida_val": 0.015943098813295364,
+   "auc_val": 0.9937476635514019,
+   "segundos": 83.06130766868591
+  },
+  {
+   "epoca": 29,
+   "perdida_entrenamiento": 0.010244777804057645,
+   "norma_grad": 0.16746522558054755,
+   "perdida_val": 0.013915296643972397,
+   "auc_val": 0.9932887850467289,
+   "segundos": 86.04239630699158
+  },
+  {
+   "epoca": 30,
+   "perdida_entrenamiento": 0.007728024498542904,
+   "norma_grad": 0.2050853345343577,
+   "perdida_val": 0.03676898404955864,
+   "auc_val": 0.9523084112149532,
+   "segundos": 88.93630743026733
+  }
+ ],
+ "mejor_epoca": 16,
+ "auc_val_mejor": 0.9987897196261682,
+ "diverge": false,
+ "parametros": 64481,
+ "segundos": 88.93630743026733,
+ "auc_val_completo": 0.998589949000287,
+ "auc_prueba": 0.9622327487603124
+}

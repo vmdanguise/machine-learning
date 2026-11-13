@@ -1,0 +1,198 @@
+\chapter{El fenómeno: EEG y crisis epilépticas}
+\label{cap:fenomeno}
+
+Este capítulo describe qué se mide, por qué una crisis deja una huella en la señal y cómo se traduce
+esa huella en un modelo matemático. El modelo de la ecuación~\eqref{eq:modelo_eeg} es la base de todo
+lo que sigue: justifica el uso de la transformada de Fourier (Capítulo~\ref{cap:fourier}), los atributos de
+potencia por banda, la calibración por paciente y el planteo de la detección como un test de hipótesis.
+
+\section{Epilepsia y crisis}
+
+Una \emph{crisis epiléptica} es la aparición transitoria de signos o síntomas debidos a una actividad
+neuronal anormalmente excesiva o sincrónica en el cerebro. La \emph{epilepsia} es la enfermedad que
+predispone a sufrir crisis en forma recurrente; en la práctica clínica se diagnostica, entre otros
+criterios, tras dos crisis no provocadas separadas por más de 24 horas \parencite{fisher2014}.
+
+Para el diagnóstico y el ajuste del tratamiento se registra el electroencefalograma (EEG) durante
+horas o días. Las crisis ocupan una fracción muy chica de ese tiempo: en los seis pacientes de
+CHB-MIT usados en este trabajo, 34 crisis suman el 0,37~\% de 222,8 horas de registro. Revisar todo
+el registro a mano es lento, y esa es la motivación de la detección automática.
+
+\section{Origen de la señal de EEG}
+
+El EEG mide diferencias de potencial eléctrico generadas por la actividad del cerebro. La mayor
+parte de la señal proviene de las corrientes postsinápticas de las neuronas piramidales de la corteza.
+Estas neuronas están alineadas en forma perpendicular a la superficie cortical, de modo que cuando
+miles de ellas reciben entradas sincronizadas sus corrientes se suman y el conjunto se comporta como
+un \emph{dipolo} de corriente. Un potencial de acción aislado es demasiado breve y local para verse en
+la superficie; lo que se registra es la suma de actividad lenta y sincronizada de millones de neuronas.
+
+El potencial que genera ese dipolo atraviesa el líquido cefalorraquídeo, el cráneo y el cuero
+cabelludo, que actúan como un conductor de volumen: atenúan la señal y la difunden espacialmente.
+Por eso la amplitud típica del EEG de superficie es de decenas de microvoltios, mientras que el EEG
+intracraneal (electrodos sobre la corteza o dentro de ella, como en los sets C, D y E de Bonn) alcanza
+cientos.
+
+La consecuencia importante para el modelado es que la amplitud registrada depende mucho de la
+\emph{sincronía}: $M$ fuentes con fases aleatorias producen una amplitud que crece como $\sqrt{M}$,
+mientras que $M$ fuentes en fase producen una amplitud que crece como $M$. Una crisis, que es por
+definición actividad excesivamente sincrónica, se ve como un aumento grande de amplitud.
+
+\section{Ritmos y bandas de frecuencia}
+
+El EEG normal no es ruido blanco: tiene oscilaciones características (ritmos) que se describen por su
+banda de frecuencia (Tabla~\ref{tab:bandas}).
+
+\begin{table}[ht]
+\centering
+\caption{Bandas de frecuencia clásicas del EEG, con los límites usados en este trabajo.}
+\label{tab:bandas}
+\begin{tabular}{llp{8cm}}
+\toprule
+Banda & Rango [Hz] & Contexto típico \\
+\midrule
+delta $\delta$ & 0,5--4 & sueño profundo; actividad lenta patológica en vigilia \\
+theta $\theta$ & 4--8 & somnolencia; frecuente en descargas ictales \\
+alfa $\alpha$ & 8--13 & vigilia relajada con ojos cerrados, en zonas occipitales \\
+beta $\beta$ & 13--30 & vigilia activa, concentración \\
+gamma $\gamma$ & 30--40 & actividad rápida (acotada a 40 Hz por el filtro) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Un ejemplo de los datos: en Bonn, el set B (voluntarios sanos, ojos cerrados) tiene el 47,6~\% de su
+potencia en la banda alfa, contra el 24,1~\% del set A (los mismos voluntarios con los ojos abiertos).
+Es el ritmo alfa occipital, que se atenúa al abrir los ojos (Capítulo~\ref{cap:fourier}).
+
+\section{Qué cambia durante una crisis}
+
+Durante una crisis aparece una \emph{descarga rítmica}: una oscilación de gran amplitud, casi
+periódica, que puede empezar en una zona (crisis focal) y propagarse, o comprometer los dos hemisferios
+desde el inicio (crisis generalizada). En los datos de este trabajo se observa que:
+
+\begin{itemize}
+  \item En Bonn, los segmentos ictales (set E) tienen un desvío estándar de 341~µV contra 48--90~µV
+        de los demás sets, y entre 10 y 100 veces más potencia entre 3 y 25 Hz.
+  \item En CHB-MIT la potencia media sube en \emph{todas} las bandas y en \emph{todos} los pacientes, entre 2 y
+        50 veces; pero la banda que más sube depende del paciente: delta en chb01 y chb08, alfa y
+        beta en chb05 y chb10 (Capítulo~\ref{cap:datos}).
+  \item Después de la crisis queda un período de actividad lenta de gran amplitud (estado
+        \emph{post-ictal}) que no se anota como crisis.
+\end{itemize}
+
+\section{Modelo matemático de la señal}
+\label{sec:modelo}
+
+\subsection{Montaje bipolar}
+
+Cada electrodo $e$ registra un potencial $v_e(t)$ respecto de una referencia. En el montaje bipolar de
+CHB-MIT, cada canal es la diferencia entre dos electrodos vecinos del sistema 10-20:
+\begin{equation}
+  x_{A\text{-}B}(t) = v_A(t) - v_B(t).
+  \label{eq:bipolar}
+\end{equation}
+La resta cancela lo que es común a los dos electrodos (la referencia, buena parte de la interferencia
+de red y de la actividad lejana) y resalta la actividad local entre ellos. Se usan los 18 canales de la
+``doble banana''; en adelante $x_c(t)$, $c = 1,\dots,C$, denota el canal $c$.
+
+\subsection{Modelo aditivo}
+
+Se modela la señal registrada en el canal $c$ como la suma de cuatro componentes:
+\begin{equation}
+\boxed{\;
+  x_c(t) \;=\; g_{p,c}\Big[\, \underbrace{b_c(t)}_{\text{fondo}}
+  \;+\; \underbrace{\mathds{1}_{\mathcal{C}}(t)\, s_c(t)}_{\text{descarga ictal}} \,\Big]
+  \;+\; \underbrace{a_c(t)}_{\text{artefactos}}
+  \;+\; \underbrace{\eta_c(t)}_{\text{ruido}}
+\;}
+\label{eq:modelo_eeg}
+\end{equation}
+donde:
+\begin{itemize}
+  \item $b_c(t)$ es la \textbf{actividad de fondo}, modelada como una suma de osciladores en las bandas
+        de la Tabla~\ref{tab:bandas} con amplitudes y fases que varían lentamente:
+        \begin{equation}
+          b_c(t) = \sum_{k} A_{c,k}(t) \cos\!\big(2\pi f_k t + \varphi_{c,k}(t)\big).
+          \label{eq:fondo}
+        \end{equation}
+        En ventanas de pocos segundos se la trata como un proceso estacionario de media cero con densidad
+        espectral $S_{b,c}(f)$.
+  \item $\mathcal{C} = \bigcup_j [a_j, b_j]$ es el conjunto de intervalos con crisis, y
+        $\mathds{1}_{\mathcal{C}}(t)$ vale 1 dentro de una crisis y 0 fuera.
+  \item $s_c(t)$ es la \textbf{descarga ictal}, una oscilación casi periódica con frecuencia fundamental
+        $f_0(t)$ (típicamente entre 3 y 8 Hz, que puede variar a lo largo de la crisis) y armónicos:
+        \begin{equation}
+          s_c(t) = \sum_{h=1}^{H} B_{c,h}(t) \cos\!\big(2\pi h\, f_0(t)\, t + \psi_{c,h}\big).
+          \label{eq:descarga}
+        \end{equation}
+        Las amplitudes $B_{c,h}$ son grandes en los canales cercanos al foco y pueden ser casi nulas en los
+        demás.
+  \item $g_{p,c} > 0$ es una \textbf{ganancia} que depende del paciente $p$ y del canal: espesor del cráneo,
+        impedancia de los electrodos, edad. Es la que hace que el ``nivel basal'' sea distinto entre
+        pacientes.
+  \item $a_c(t)$ son \textbf{artefactos} (movimiento, músculo, parpadeo, electrodo suelto) y $\eta_c(t)$ es
+        ruido del equipo e interferencia de banda angosta (50 Hz en Bonn; 16 y 32 Hz en algunos registros
+        de CHB-MIT).
+\end{itemize}
+
+\subsection{Consecuencia en el dominio de la frecuencia}
+
+Si las componentes son procesos independientes y de media cero, sus densidades espectrales se
+suman (el espectro de una suma de procesos no correlacionados es la suma de los espectros):
+\begin{equation}
+  S_{x_c}(f) = g_{p,c}^2 \Big[ S_{b,c}(f) + \mathds{1}_{\mathcal{C}}\, S_{s,c}(f) \Big] + S_{a,c}(f) + S_{\eta,c}(f).
+  \label{eq:espectro_modelo}
+\end{equation}
+La potencia en una banda $\mathcal{B} = [f_1, f_2)$ es la integral de la densidad espectral,
+$P_{c,\mathcal{B}} = \int_{\mathcal{B}} S_{x_c}(f)\,df$. Ignorando artefactos y ruido, el cociente entre la potencia
+durante y fuera de la crisis es
+\begin{equation}
+  \frac{P^{\text{crisis}}_{c,\mathcal{B}}}{P^{\text{basal}}_{c,\mathcal{B}}}
+  = 1 + \frac{\int_{\mathcal{B}} S_{s,c}(f)\,df}{\int_{\mathcal{B}} S_{b,c}(f)\,df} \;>\; 1,
+\end{equation}
+y en escala logarítmica
+\begin{equation}
+  \log_{10} P^{\text{crisis}}_{c,\mathcal{B}} - \log_{10} P^{\text{basal}}_{c,\mathcal{B}}
+  = \log_{10}\!\left(1 + \frac{P_{s,c,\mathcal{B}}}{P_{b,c,\mathcal{B}}}\right) > 0.
+  \label{eq:dif_log}
+\end{equation}
+Tres consecuencias directas del modelo:
+\begin{enumerate}
+  \item \textbf{La potencia por banda es un buen atributo.} La crisis suma potencia, sobre todo en las
+        bandas que contienen $f_0$ y sus armónicos. Por eso la transformada de Fourier es la herramienta
+        natural (Capítulo~\ref{cap:fourier}).
+  \item \textbf{El logaritmo convierte la ganancia en una constante aditiva.} Como
+        $\log P_{c,\mathcal{B}} = 2\log g_{p,c} + \log\!\big(P_{b,c,\mathcal{B}} + \mathds{1}_{\mathcal{C}}P_{s,c,\mathcal{B}}\big)$,
+        el término $2\log g_{p,c}$ no depende del tiempo ni de la clase. Restar la mediana de cada
+        paciente (que, al ser las crisis menos del 1~\% del tiempo, es esencialmente el nivel basal) lo
+        elimina. Esta es la justificación de la \emph{calibración por paciente} que se usa en los
+        Capítulos~\ref{cap:convexos} y~\ref{cap:cnn}.
+  \item \textbf{La banda que más cambia depende de $f_0$ y de $S_{b,c}$}, que varían entre pacientes. Un
+        detector que funcione para pacientes nuevos tiene que combinar varias bandas y canales.
+\end{enumerate}
+
+\section{La detección como test de hipótesis}
+\label{sec:hipotesis}
+
+Se divide la señal en ventanas de $L = 4$ s. Para cada ventana $w$, con sus datos $\mathbf{X}_w$ (los
+18 canales), hay dos hipótesis:
+\begin{equation}
+  H_0:\ \mathbf{X}_w = \text{fondo} + \text{artefactos} + \text{ruido} \qquad\text{(sin crisis)},
+  \qquad
+  H_1:\ \mathbf{X}_w \text{ incluye además } s_c(t) \qquad\text{(crisis)}.
+\end{equation}
+Un detector calcula un puntaje $s(\mathbf{x})$ a partir de los atributos $\mathbf{x}$ de la ventana y
+decide $H_1$ si $s(\mathbf{x}) > \tau$. El lema de Neyman-Pearson (Sección~\ref{sec:neyman_pearson})
+dice que el mejor puntaje posible es la razón de verosimilitud $p(\mathbf{x}\mid H_1)/p(\mathbf{x}\mid H_0)$.
+Como esas densidades son desconocidas, se aproximan con modelos entrenados con datos: regresión logística,
+SVM y una red convolucional.
+
+\paragraph{El problema del desbalance.} Con probabilidad a priori de crisis $\pi_1 \approx 0{,}0037$,
+la regla de Bayes dice que la probabilidad de crisis dada una ventana es
+\begin{equation}
+  P(H_1 \mid \mathbf{x}) = \frac{\pi_1\, p(\mathbf{x}\mid H_1)}{\pi_1\, p(\mathbf{x}\mid H_1) + \pi_0\, p(\mathbf{x}\mid H_0)}.
+\end{equation}
+Para que esta probabilidad supere 1/2 hace falta que la razón de verosimilitud supere
+$\pi_0/\pi_1 \approx 270$. Un clasificador que nunca detecta nada acierta el 99,6~\% de las ventanas; por
+eso la exactitud (\emph{accuracy}) no sirve como métrica y en el Capítulo~\ref{cap:metricas} se usan
+sensibilidad, especificidad, falsas alarmas por hora y curvas ROC.

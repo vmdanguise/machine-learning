@@ -1,0 +1,10 @@
+modelo,clase,sensibilidad,especificidad,AUC_ovr
+logistica,sano,0.99,0.99,0.9994
+logistica,interictal,0.97,0.9833,0.9977
+logistica,ictal,0.96,0.99,0.998
+svm_lineal,sano,0.99,0.9933,0.9933
+svm_lineal,interictal,0.97,0.98,0.994
+svm_lineal,ictal,0.96,0.99,0.9928
+svm_rbf,sano,0.995,0.9967,0.9987
+svm_rbf,interictal,0.985,0.9867,0.9984
+svm_rbf,ictal,0.97,0.995,0.9946

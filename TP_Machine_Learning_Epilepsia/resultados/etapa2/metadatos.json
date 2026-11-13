@@ -1,0 +1,76 @@
+{
+  "fs": 256,
+  "ventana_s": 4,
+  "canales": [
+    "FP1-F7",
+    "F7-T7",
+    "T7-P7",
+    "P7-O1",
+    "FP1-F3",
+    "F3-C3",
+    "C3-P3",
+    "P3-O1",
+    "FP2-F4",
+    "F4-C4",
+    "C4-P4",
+    "P4-O2",
+    "FP2-F8",
+    "F8-T8",
+    "T8-P8-0",
+    "P8-O2",
+    "FZ-CZ",
+    "CZ-PZ"
+  ],
+  "bandas_hz": {
+    "delta": [
+      0.5,
+      4
+    ],
+    "theta": [
+      4,
+      8
+    ],
+    "alfa": [
+      8,
+      13
+    ],
+    "beta": [
+      13,
+      30
+    ],
+    "gamma": [
+      30,
+      40.5
+    ]
+  },
+  "filtro": "Butterworth orden 4, pasabanda 0,5-40 Hz, sosfiltfilt",
+  "stft": {
+    "ventana": "hann",
+    "nperseg": 256,
+    "noverlap": 128,
+    "frecuencias": "1-40 Hz"
+  },
+  "pacientes": [
+    "chb01",
+    "chb02",
+    "chb03",
+    "chb05",
+    "chb08",
+    "chb10"
+  ],
+  "particion_fija": {
+    "entrenamiento": [
+      "chb02",
+      "chb05",
+      "chb08"
+    ],
+    "validacion": [
+      "chb01"
+    ],
+    "prueba": [
+      "chb03",
+      "chb10"
+    ]
+  },
+  "fuente": "https://physionet.org/content/chbmit/1.0.0/"
+}

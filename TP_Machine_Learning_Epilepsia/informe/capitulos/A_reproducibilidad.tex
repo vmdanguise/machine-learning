@@ -1,0 +1,126 @@
+\chapter{Reproducibilidad}
+\label{ap:reproducibilidad}
+
+Todas las tablas y figuras del informe salen de archivos generados por el código del trabajo. Este apéndice describe
+la estructura del proyecto, el entorno y los pasos para reproducir los resultados desde cero.
+
+\section{Estructura del proyecto}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+Ruta & Contenido \\
+\midrule
+\texttt{datos/bonn/\{Z,O,N,F,S\}}     & Bonn, descargado a mano (no se incluye) \\
+\texttt{datos/chbmit/}                & EDF de CHB-MIT, unos 8,8~GB (no se incluyen) \\
+\texttt{datos/chbmit\_proc/}          & un \texttt{.npz} por registro, \texttt{crisis.csv}, \texttt{indice.csv}, \texttt{particion.json} \\
+\texttt{scripts/descargar\_chbmit.py}  & descarga desde PhysioNet y verificación SHA256 \\
+\texttt{scripts/preprocesar\_chbmit.py}& filtrado, ventanas de 4~s, espectrogramas y potencia por banda \\
+\texttt{scripts/metricas.py}          & métricas por ventana y por evento, suavizado, umbral de Neyman-Pearson \\
+\texttt{scripts/entrenar\_cnn.py}      & CNN y comparativa de optimizadores \\
+\texttt{notebooks/src/*.py}           & fuente de cada notebook (formato \emph{percent} de jupytext) \\
+\texttt{notebooks/etapa1\_bonn\_fourier.ipynb}        & Fourier, Welch, filtrado y bandas en Bonn \\
+\texttt{notebooks/etapa2\_chbmit.ipynb}               & análisis exploratorio de CHB-MIT y particiones \\
+\texttt{notebooks/etapa3\_modelos\_clasicos.ipynb}     & logística, SVM, optimalidad, KKT, LOPO, Neyman-Pearson \\
+\texttt{notebooks/etapa4\_cnn\_optimizadores.ipynb}    & análisis de la comparativa y evaluación clínica de la CNN \\
+\texttt{resultados/etapa\{1..4\}/}     & figuras, tablas CSV y metadatos de cada etapa \\
+\texttt{informe/}                     & este documento \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Correspondencia con los capítulos.} La Etapa 1 alimenta el Capítulo~\ref{cap:fourier}; la Etapa 2, el
+Capítulo~\ref{cap:datos}; la Etapa 3, el Capítulo~\ref{cap:convexos} y las verificaciones numéricas del
+Capítulo~\ref{cap:optimizacion}; la Etapa 4, los Capítulos~\ref{cap:cnn} y~\ref{cap:resultados}. Las figuras de
+\texttt{informe/figuras/etapaN/} son copias de las de \texttt{resultados/etapaN/}.
+
+\section{Entorno}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Componente & Versión \\
+\midrule
+Python        & 3.12.10 \\
+NumPy         & 2.5.4 \\
+SciPy         & 1.18.1 \\
+scikit-learn  & 1.9.1 \\
+pandas        & 3.1.1 \\
+Matplotlib    & 3.11.2 \\
+MNE-Python    & 1.13.2 (lectura de EDF) \\
+PyTorch       & 2.15.0, versión para CPU \\
+jupytext / nbclient & 1.19.6 / 0.11.0 \\
+\midrule
+Procesador    & AMD Ryzen 7 5700U, 8 núcleos \\
+Memoria       & 21,8~GB \\
+GPU           & no \\
+Sistema       & Windows, PowerShell \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Las versiones exactas están en \texttt{requirements.txt}. Los resultados que dependen del azar (particiones de la validación
+cruzada, inicialización de la CNN, submuestreo de ventanas normales) usan semillas fijas. PyTorch en CPU es determinístico
+para estas operaciones, pero distintas versiones de las bibliotecas de álgebra lineal pueden cambiar los últimos decimales.
+
+\section{Datos}
+
+\begin{itemize}
+  \item \textbf{Bonn} \parencite{andrzejak2001}: se descargan los cinco archivos comprimidos (Z, O, N, F, S) de la página del
+        grupo de Neurofísica de la Universidad de Bonn y se descomprimen en \texttt{datos/bonn/}, una carpeta por set.
+  \item \textbf{CHB-MIT} \parencite{shoeb2009,goldberger2000,guttag2010}: el script descarga los registros de
+        \url{https://physionet.org/files/chbmit/1.0.0/} y verifica cada archivo contra el \texttt{SHA256SUMS.txt} oficial.
+        La base se distribuye con la licencia Open Data Commons Attribution 1.0.
+\end{itemize}
+
+\section{Pasos para reproducir}
+
+Desde la carpeta del proyecto, en PowerShell:
+\begin{enumerate}
+  \item \textbf{Entorno.}
+\begin{verbatim}
+python -m venv .venv
+.\.venv\Scripts\pip install -r requirements.txt `
+    --extra-index-url https://download.pytorch.org/whl/cpu
+.\.venv\Scripts\python -m ipykernel install --user --name tp-epilepsia
+\end{verbatim}
+  \item \textbf{Descarga de CHB-MIT} (unos 8,8~GB; si se corta, se reanuda sin volver a bajar lo verificado):
+\begin{verbatim}
+.\.venv\Scripts\python scripts\descargar_chbmit.py datos\chbmit `
+    chb01 chb02 chb03 chb05 chb08 chb10
+\end{verbatim}
+  \item \textbf{Preprocesamiento} (con 4 procesos en paralelo):
+\begin{verbatim}
+.\.venv\Scripts\python scripts\preprocesar_chbmit.py `
+    datos\chbmit datos\chbmit_proc 4
+\end{verbatim}
+  \item \textbf{Notebooks de las Etapas 1 a 3}, desde \texttt{notebooks\textbackslash}; para cada uno:
+\begin{verbatim}
+..\.venv\Scripts\jupytext --to ipynb src\etapa1_bonn_fourier.py `
+    -o etapa1_bonn_fourier.ipynb
+..\.venv\Scripts\jupyter execute --inplace `
+    --kernel_name=tp-epilepsia etapa1_bonn_fourier.ipynb
+\end{verbatim}
+        La Etapa 3 guarda los puntajes de los modelos convexos en la partición fija, que la Etapa 4 usa para comparar.
+  \item \textbf{Entrenamiento de la CNN}, en tres fases (unos 92~s por corrida en CPU):
+\begin{verbatim}
+.\.venv\Scripts\python scripts\entrenar_cnn.py . busqueda  # 18 corridas
+.\.venv\Scripts\python scripts\entrenar_cnn.py . semillas  # 24 corridas
+.\.venv\Scripts\python scripts\entrenar_cnn.py . posthoc   # 20 corridas
+\end{verbatim}
+        La fase \texttt{semillas} elige la tasa de cada optimizador a partir de las corridas de la búsqueda (mayor AUC de
+        validación) y la guarda en \texttt{resultados/etapa4/lr\_elegidas.json}. La fase \texttt{posthoc} corre la tasa
+        más alta de cada grilla. Solo son nuevas 20 de sus 30 corridas: para SGD la tasa alta coincide con la elegida, y la
+        semilla 0 de los demás ya está en la búsqueda. Cada corrida guarda su historia (JSON) y los puntajes del mejor modelo (NPZ); si el JSON ya
+        existe, la corrida se saltea, así que el proceso puede cortarse y reanudarse.
+  \item \textbf{Notebook de la Etapa 4}, igual que en el paso 4. Lee las corridas guardadas, arma las tablas y figuras de los
+        Capítulos~\ref{cap:cnn} y~\ref{cap:resultados} y hace la evaluación clínica del modelo elegido.
+\end{enumerate}
+
+\section{Compilación del informe}
+
+El informe está en \texttt{informe/}: \texttt{main.tex}, un archivo por capítulo en \texttt{capitulos/},
+\texttt{referencias.bib} y las figuras en \texttt{figuras/}. Para compilarlo en Overleaf: subir la carpeta comprimida
+como proyecto nuevo, elegir el compilador pdf\LaTeX{} (la bibliografía usa \texttt{biblatex} con \texttt{biber}, que
+Overleaf ejecuta automáticamente) y compilar.

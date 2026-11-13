@@ -1,0 +1,48 @@
+\chapter{Aprendizaje estadístico y sobreajuste}
+\label{cap:aprendizaje}
+
+\section{Formulación del problema}
+
+Sea $(\bm x, y)$ un par aleatorio con distribución desconocida $\mathcal{D}$, donde $\bm x\in\R^d$ son las características espectrales de una ventana e $y\in\{0,1\}$ indica si hay crisis. Se busca una función $h_\theta:\R^d\to[0,1]$ que minimice el \emph{riesgo}
+\begin{equation}
+R(\theta) = \E_{(\bm x,y)\sim\mathcal D}\big[\ell(h_\theta(\bm x), y)\big],
+\end{equation}
+pero como $\mathcal D$ es desconocida se minimiza el \emph{riesgo empírico} $\hat R(\theta) = \frac1n\sum_i \ell(h_\theta(\bm x_i), y_i)$ sobre una muestra de entrenamiento.
+
+\section{Entropía cruzada y máxima verosimilitud}
+
+Si se modela $P(y=1\mid\bm x) = \sigma(z_\theta(\bm x))$, con $\sigma(z) = 1/(1+e^{-z})$, la log-verosimilitud negativa de la muestra es
+\begin{equation}
+-\log\mathcal{L}(\theta) = \sum_i \Big[-y_i\log\sigma(z_i) - (1-y_i)\log(1-\sigma(z_i))\Big] = \sum_i\Big[\log(1+e^{z_i}) - y_i z_i\Big],
+\end{equation}
+que es la \emph{entropía cruzada binaria} \parencite[cap.~5]{bishop2024}. Minimizarla equivale a estimar $\theta$ por máxima verosimilitud.
+
+\subsection{Desbalance de clases}
+
+Con una prevalencia de crisis $\pi\approx 0{,}01$, un clasificador que siempre responde ``normal'' tiene una exactitud del 99~\% y sensibilidad nula. Para compensar se pondera la pérdida: $\ell_i = c_{y_i}\,[\log(1+e^{z_i}) - y_i z_i]$ con $c_1/c_0 = (1-\pi)/\pi$. Esto equivale a entrenar como si las clases estuvieran balanceadas; el umbral de decisión se ajusta después (capítulo~\ref{cap:evaluacion}).
+
+\pendiente{teoría de decisión bayesiana y riesgo con costos asimétricos, \cite[cap.~2]{duda2001}.}
+
+\section{Sesgo, varianza y sobreajuste}
+
+Para la pérdida cuadrática, el error esperado de un estimador $\hat h$ entrenado sobre una muestra aleatoria se descompone en
+\begin{equation}
+\E\big[(y-\hat h(\bm x))^2\big] = \underbrace{\big(\E[\hat h(\bm x)] - h^\star(\bm x)\big)^2}_{\text{sesgo}^2} + \underbrace{\operatorname{Var}\big[\hat h(\bm x)\big]}_{\text{varianza}} + \underbrace{\sigma^2}_{\text{ruido}}.
+\end{equation}
+Un modelo con mucha capacidad reduce el sesgo pero aumenta la varianza: se ajusta a particularidades de la muestra de entrenamiento (\emph{sobreajuste}) y generaliza mal.
+
+\pendiente{demostración de la descomposición; figura conceptual.}
+
+\section{Regularización}
+
+\begin{itemize}
+  \item \textbf{Penalización $L_2$:} minimizar $\hat R(\theta) + \frac\mu2\|\theta\|^2$. Por dualidad de Lagrange es equivalente a minimizar $\hat R$ sujeto a $\|\theta\|^2\le r^2$ para algún $r$ que depende de $\mu$ \parencite[sec.~7.2]{goodfellow2016}. En AdamW se aplica como decaimiento de pesos desacoplado \parencite{loshchilov2019}.
+  \item \textbf{Dropout:} en cada paso se anula aleatoriamente cada unidad oculta con probabilidad $q$, lo que equivale aproximadamente a promediar un ensamble de subredes.
+  \item \textbf{Early stopping:} se detiene el entrenamiento cuando el desempeño en validación deja de mejorar. Para modelos lineales con pérdida cuadrática es equivalente a una regularización $L_2$ \parencite[sec.~7.8]{goodfellow2016}.
+\end{itemize}
+
+\section{Fuga de información y partición por paciente}
+
+Las ventanas consecutivas de un mismo registro son casi idénticas. Si se reparten al azar entre entrenamiento y prueba, el modelo puede ``reconocer al paciente'' en lugar de aprender a detectar crisis, y la métrica de prueba queda inflada. Por eso todas las ventanas de un mismo sujeto van al mismo conjunto. En CHB-MIT, además, los casos \texttt{chb01} y \texttt{chb21} son la misma paciente y se tratan como un único sujeto.
+
+\pendiente{comparación partición por sujeto vs. aleatoria (sección 11 del notebook), figura \texttt{sobreajuste\_curvas}.}

@@ -1,0 +1,6 @@
+set,descripcion,media_uV,desvio_uV,max_abs_uV
+A,"Sano, ojos abiertos",-6.3,48.3,294.0
+B,"Sano, ojos cerrados",-12.5,70.7,424.0
+C,"Interictal, zona opuesta",-8.9,59.4,623.0
+D,"Interictal, zona epileptogena",-6.2,90.3,2047.0
+E,Ictal (crisis),-4.7,341.2,2047.0

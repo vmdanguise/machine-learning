@@ -1,0 +1,533 @@
+\chapter{Red convolucional y optimizadores}
+\label{cap:cnn}
+
+Los modelos convexos del Capítulo~\ref{cap:convexos} trabajan con 90 números por ventana: la potencia de cada canal
+en cinco bandas fijas. Una red convolucional (CNN) puede trabajar directamente con el espectrograma completo y aprender
+qué patrones de frecuencia y tiempo indican una crisis. El precio es que su entrenamiento deja de ser un problema convexo
+(Sección~\ref{sec:no_convexo}): el resultado depende del punto inicial, del algoritmo de optimización y de la tasa de
+aprendizaje. Este capítulo describe la red, deduce cómo se calcula su gradiente, presenta los seis optimizadores que se
+comparan y detalla el diseño del experimento. Los resultados están en el Capítulo~\ref{cap:resultados}. El código es
+\texttt{scripts/entrenar\_cnn.py} y el análisis, \texttt{etapa4\_cnn\_optimizadores.ipynb}.
+
+\section{Entrada}
+\label{sec:cnn_entrada}
+
+Cada ventana de 4~s se representa con el tensor que se guardó en el preprocesamiento (Sección~\ref{sec:preproc}):
+\begin{equation}
+  \mathbf{X} \in \R^{18 \times 40 \times 7}, \qquad
+  X_{c,f,t} = \log_{10}\big|\mathrm{STFT}\{x_c\}(f, t)\big|^2,
+\end{equation}
+con 18 canales bipolares $c$, 40 frecuencias $f$ de 1 a 40~Hz (resolución de 1~Hz, ventana de Hann de 1~s) y 7 cuadros de
+tiempo $t$ (salto de 0,5~s). Antes de entrar a la red se aplican dos transformaciones:
+\begin{enumerate}
+  \item \textbf{Calibración por paciente} (ecuación~\eqref{eq:calibracion}): a cada canal y frecuencia se le resta la mediana de
+        ese paciente sobre todas sus ventanas y cuadros. Elimina el término $2\log g_{p,c}$ del modelo~\eqref{eq:modelo_eeg}
+        y, además, la forma espectral basal propia de cada paciente.
+  \item \textbf{Estandarización}: a cada canal y frecuencia se le resta la media y se lo divide por el desvío, calculados
+        solo con el conjunto de entrenamiento.
+\end{enumerate}
+Los canales del EEG se tratan como los \emph{canales de entrada} de la convolución (igual que los tres colores de una
+imagen), y el plano frecuencia--tiempo, como la ``imagen''. Así cada filtro de la primera capa combina los 18 canales
+con pesos propios, y se desplaza a lo largo de la frecuencia y del tiempo.
+
+\section{Arquitectura}
+\label{sec:arquitectura}
+
+\subsection{Capas}
+
+\paragraph{Convolución.} Una capa convolucional con $C_\text{in}$ canales de entrada, $C_\text{out}$ de salida y núcleo de
+$k_f \times k_t$ calcula
+\begin{equation}
+  Z_{o,f,t} = b_o + \sum_{c=1}^{C_\text{in}}\ \sum_{i=1}^{k_f}\ \sum_{j=1}^{k_t} W_{o,c,i,j}\; X_{c,\ f + i - r_f,\ t + j - r_t},
+  \qquad r_f = \tfrac{k_f + 1}{2},\ r_t = \tfrac{k_t + 1}{2},
+  \label{eq:conv}
+\end{equation}
+con relleno de ceros en los bordes para que la salida tenga el mismo tamaño que la entrada. Estrictamente es una
+\emph{correlación cruzada} (la convolución del Capítulo~\ref{cap:fourier} invierte el núcleo), pero como $W$ se aprende la
+diferencia es irrelevante. Tiene $C_\text{out}(C_\text{in}k_fk_t + 1)$ parámetros, independientemente del tamaño de la entrada:
+los mismos pesos se usan en todas las posiciones.
+
+Esa repetición de pesos da la propiedad que motiva la arquitectura: la capa es \textbf{equivariante a traslaciones}. Si la
+entrada se desplaza $\Delta$ posiciones a lo largo de la frecuencia, la salida se desplaza igual. Una descarga rítmica con
+fundamental $f_0$ (ecuación~\eqref{eq:descarga}) aparece como una línea horizontal en el espectrograma; si en otro paciente
+$f_0$ es distinta, la línea está más arriba o más abajo, y el mismo filtro la detecta. Es la variabilidad entre pacientes que
+mostró la Tabla~\ref{tab:dif_log}. (Como el eje de frecuencias es lineal, los armónicos $2f_0, 3f_0$ no se desplazan lo mismo
+que la fundamental, así que la equivariancia es solo aproximada para el patrón completo.)
+
+\paragraph{Normalización por lotes \parencite{ioffe2015}.} Para cada canal $o$, sobre las $B$ ventanas del lote y todas
+las posiciones $(f, t)$, se calcula la media $\mu_o$ y la varianza $\sigma_o^2$, y
+\begin{equation}
+  \hat Z_{o,f,t} = \frac{Z_{o,f,t} - \mu_o}{\sqrt{\sigma_o^2 + \epsilon}}, \qquad
+  \text{BN}(Z)_{o,f,t} = \gamma_o\,\hat Z_{o,f,t} + \beta_o,
+  \label{eq:bn}
+\end{equation}
+con $\gamma_o, \beta_o$ aprendidos y $\epsilon = 10^{-5}$. Durante la evaluación no hay lote: se usan promedios móviles de
+$\mu_o$ y $\sigma_o^2$ acumulados en el entrenamiento (factor 0,1 por paso). Su efecto sobre la optimización se analiza en la
+Sección~\ref{sec:bn_escala}.
+
+\paragraph{ReLU} $\max(0, z)$, elemento a elemento. \textbf{Max pooling} $(2,1)$: toma el máximo de cada par de frecuencias
+vecinas, reduciendo a la mitad el eje de frecuencia y dejando el tiempo igual. \textbf{Promedio global}: promedia cada
+canal sobre todas las posiciones, dejando un vector de 64 números. \textbf{Dropout} \parencite{goodfellow2016}: durante el
+entrenamiento pone en cero cada componente con probabilidad $p = 0{,}3$ y multiplica las restantes por $1/(1-p)$, de modo que
+la esperanza no cambia; en evaluación no hace nada. Finalmente una capa lineal da un único número, el \emph{logit} $z$.
+
+\subsection{Tabla de capas}
+
+\begin{table}[ht]
+\centering
+\caption{Arquitectura de la CNN. Entrada: $18 \times 40 \times 7$ (canales $\times$ frecuencias $\times$ cuadros de tiempo).
+Los parámetros incluyen pesos, sesgos y los $\gamma, \beta$ de la normalización por lotes.}
+\label{tab:cnn_capas}
+\begin{tabular}{clcr}
+\toprule
+\# & Bloque & Salida & Parámetros \\
+\midrule
+1 & Conv $5\times3$, 32 filtros + BN + ReLU + MaxPool $(2,1)$ & $32 \times 20 \times 7$ & 8\,736 \\
+2 & Conv $3\times3$, 64 filtros + BN + ReLU + MaxPool $(2,1)$ & $64 \times 10 \times 7$ & 18\,624 \\
+3 & Conv $3\times3$, 64 filtros + BN + ReLU                   & $64 \times 10 \times 7$ & 37\,056 \\
+4 & Promedio global + Dropout 0,3 + Lineal                    & 1 (logit)               & 65 \\
+\midrule
+  & Total &  & 64\,481 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Por ejemplo, el bloque 1 tiene $32\cdot(18\cdot5\cdot3 + 1) = 8\,672$ parámetros de convolución y $2\cdot32 = 64$ de la
+normalización. El primer núcleo es más alto en frecuencia ($5$) que en tiempo ($3$) para captar picos espectrales de
+algunos hertz de ancho.
+
+\paragraph{Campo receptivo.} Cada salida de la última capa convolucional depende de una región de la entrada que se calcula
+capa por capa: un núcleo de tamaño $k$ agrega $(k-1)\cdot s$ posiciones, donde $s$ es el producto de los pasos de los
+\emph{poolings} anteriores. En frecuencia: $5 \to 6 \to 10 \to 12 \to 20$, es decir 20~Hz. En tiempo: $3 \to 5 \to 7$
+cuadros, la ventana entera. Cada neurona de la última capa ve la mitad del rango de frecuencias y los 4~s completos, y el
+promedio global combina todas.
+
+\paragraph{Tamaño.} 64\,481 parámetros es poco para una CNN, y es deliberado: hay solo 403 ventanas ictales de
+entrenamiento (13 crisis de 3 pacientes), y una red más grande las memorizaría. Para comparar, la regresión logística de
+CHB-MIT tiene 91 parámetros.
+
+\subsection{Salida y pérdida}
+
+La salida $z = f_{\vth}(\mathbf{X})$ se interpreta como el logit de la probabilidad de crisis, $\hat p = \sigma(z)$, y la red
+se entrena minimizando la entropía cruzada binaria promedio sobre el lote $\mathcal{B}$:
+\begin{equation}
+  J_{\mathcal{B}}(\vth) = \frac{1}{|\mathcal{B}|}\sum_{i \in \mathcal{B}} \ell(z_i, y_i), \qquad
+  \ell(z, y) = -y\log\sigma(z) - (1 - y)\log\big(1 - \sigma(z)\big).
+  \label{eq:bce}
+\end{equation}
+Es la pérdida~\eqref{eq:logistica_binaria} de la regresión logística, con la diferencia de que $z$ ya no es lineal en $\vth$.
+Por eso es convexa en $z$ pero no en $\vth$. Numéricamente se calcula como
+$\ell = \max(z, 0) - zy + \log(1 + e^{-|z|})$, que no desborda para $|z|$ grande (función
+\texttt{binary\_cross\_entropy\_with\_logits}). Como la decisión final usa un umbral de Neyman-Pearson sobre $z$
+(Sección~\ref{sec:umbral_np}), la calibración de $\hat p$ como probabilidad no importa, solo el orden de los puntajes.
+
+\section{Retropropagación}
+\label{sec:retropropagacion}
+
+Todos los optimizadores de este capítulo necesitan el gradiente $\nabla_{\vth}J_{\mathcal{B}}$. La red es una composición
+de funciones, $z = h_L \circ h_{L-1} \circ \cdots \circ h_1(\mathbf{X})$, cada una con sus parámetros $\vth_\ell$. La
+\textbf{retropropagación} es la regla de la cadena aplicada de la salida hacia la entrada, reutilizando los resultados
+intermedios.
+
+\paragraph{Último paso.} Con $\sigma'(z) = \sigma(z)(1 - \sigma(z))$,
+\begin{equation}
+  \frac{\partial\ell}{\partial z} = -y\,\frac{\sigma(z)(1 - \sigma(z))}{\sigma(z)} + (1 - y)\,\frac{\sigma(z)(1 - \sigma(z))}{1 - \sigma(z)}
+  = \sigma(z) - y = \hat p - y.
+  \label{eq:grad_bce}
+\end{equation}
+Es el caso binario de~\eqref{eq:grad_ce}: \emph{predicción menos verdad}. El gradiente es grande cuando la red se equivoca
+con confianza y casi cero cuando acierta con confianza: las ventanas fáciles casi no aportan al aprendizaje.
+
+\paragraph{Recursión.} Sea $\mathbf{a}_\ell = h_\ell(\mathbf{a}_{\ell-1}; \vth_\ell)$ la salida de la capa $\ell$ y
+$\boldsymbol\delta_\ell = \partial\ell/\partial\mathbf{a}_\ell$ (el ``error'' que llega a esa capa). Partiendo de
+$\delta_L = \hat p - y$,
+\begin{equation}
+  \frac{\partial\ell}{\partial\vth_\ell} = \Big(\frac{\partial\mathbf{a}_\ell}{\partial\vth_\ell}\Big)^{\!\top}\boldsymbol\delta_\ell,
+  \qquad
+  \boldsymbol\delta_{\ell-1} = \Big(\frac{\partial\mathbf{a}_\ell}{\partial\mathbf{a}_{\ell-1}}\Big)^{\!\top}\boldsymbol\delta_\ell.
+  \label{eq:backprop}
+\end{equation}
+Nunca se forman las matrices jacobianas: cada capa sabe calcular directamente el producto de su jacobiana transpuesta por un
+vector. Para las capas usadas:
+\begin{itemize}
+  \item \textbf{Lineal} $z = \vw^\top\mathbf{a} + b$: $\partial\ell/\partial\vw = \delta\,\mathbf{a}$, $\partial\ell/\partial b = \delta$,
+        $\boldsymbol\delta_\text{entrada} = \delta\,\vw$.
+  \item \textbf{Convolución}~\eqref{eq:conv}: derivando,
+        \[
+          \frac{\partial\ell}{\partial W_{o,c,i,j}} = \sum_{f,t}\delta_{o,f,t}\,X_{c,\,f+i-r_f,\,t+j-r_t},
+          \qquad
+          \frac{\partial\ell}{\partial b_o} = \sum_{f,t}\delta_{o,f,t}.
+        \]
+        El gradiente de cada peso suma la contribución de todas las posiciones donde se usó; el error hacia atrás es
+        otra convolución, con el núcleo invertido.
+  \item \textbf{ReLU}: deja pasar $\delta$ donde la entrada fue positiva y lo anula donde no.
+  \item \textbf{Max pooling}: el error va entero a la posición que tuvo el máximo; las demás reciben cero.
+  \item \textbf{Promedio global} sobre $P$ posiciones: cada posición recibe $\delta/P$.
+  \item \textbf{Normalización por lotes}: como $\mu_o$ y $\sigma_o$ dependen de todo el lote, el gradiente de una ventana
+        depende de las otras. Llamando $\mathbf{g} = \partial\ell/\partial\hat Z$ (sobre las $m$ entradas del canal),
+        $\partial\ell/\partial Z = \frac{1}{\sqrt{\sigma^2 + \epsilon}}\big(\mathbf{g} - \bar g - \hat Z\,\overline{g\hat Z}\big)$,
+        donde la barra es el promedio sobre las $m$ entradas: es $\mathbf{g}$ proyectado para quitarle las componentes en la
+        dirección de la media y de la escala.
+\end{itemize}
+Calcular el gradiente cuesta del orden de dos veces lo que cuesta evaluar la red, independientemente del número de
+parámetros. En la práctica lo calcula la diferenciación automática de PyTorch (\texttt{loss.backward()}), que implementa
+exactamente~\eqref{eq:backprop}.
+
+\subsection{Invariancia de escala por la normalización}
+\label{sec:bn_escala}
+
+La normalización por lotes cambia la geometría del problema de optimización de una forma que importa para comparar
+optimizadores.
+
+\begin{proposicion}
+\label{prop:bn_escala}
+Sea $\vw$ el vector de pesos de una convolución seguida de normalización por lotes, y $J(\vw)$ la pérdida vista como
+función de $\vw$ (con el resto fijo). Si se desprecia $\epsilon$, para todo $c > 0$:
+\begin{enumerate}
+  \item $J(c\vw) = J(\vw)$;
+  \item $\nabla J(c\vw) = \frac{1}{c}\nabla J(\vw)$;
+  \item $\vw^\top\nabla J(\vw) = 0$.
+\end{enumerate}
+\end{proposicion}
+\begin{proof}
+(1) Multiplicar $\vw$ por $c$ multiplica la salida de la convolución (sin el sesgo, que la normalización cancela) por $c$, y
+con ella la media y el desvío del lote; el cociente~\eqref{eq:bn} no cambia. (2) Derivando $J(c\vw) = J(\vw)$ respecto de
+$\vw$: $c\,\nabla J(c\vw) = \nabla J(\vw)$. (3) Derivando $J(c\vw) = J(\vw)$ respecto de $c$ en $c = 1$:
+$\vw^\top\nabla J(\vw) = 0$.
+\end{proof}
+
+Las consecuencias son dos. Primero, la pérdida \emph{no tiene mínimo aislado} en esos pesos: toda la semirrecta
+$\{c\vw^* : c > 0\}$ tiene el mismo valor. Es otra forma de no convexidad estricta, además de las simetrías de la
+Sección~\ref{sec:no_convexo}. Segundo, como el gradiente es ortogonal a $\vw$, un paso de SGD aumenta la norma:
+$\lVert\vw - \eta\nabla J\rVert^2 = \lVert\vw\rVert^2 + \eta^2\lVert\nabla J\rVert^2$; y por (2) el paso \emph{angular}, que es lo
+único que cambia la función, es del orden de $\eta\lVert\nabla J(\vw)\rVert/\lVert\vw\rVert \propto \eta/\lVert\vw\rVert^2$. La tasa de
+aprendizaje efectiva de esas capas depende de la norma de sus pesos, que a su vez depende del optimizador y del decaimiento
+de pesos. Esto hace que comparar valores de $\eta$ entre optimizadores sea todavía menos directo, y es una razón más para
+buscar la tasa por separado para cada uno.
+
+\section{Optimizadores de primer orden}
+\label{sec:optimizadores}
+
+Notación: $\mathbf{g}_t = \nabla J_{\mathcal{B}_t}(\vth_t)$ es el gradiente sobre el lote $\mathcal{B}_t$ de 64 ventanas, $\eta$ la
+tasa de aprendizaje y $\lambda$ el decaimiento de pesos. Las operaciones entre vectores ($\mathbf{g}^2$, $\sqrt{\cdot}$, la
+división) son elemento a elemento. Las fórmulas son las que implementa PyTorch, que en algunos casos difieren en detalles de
+los artículos originales; se señalan las diferencias.
+
+\subsection{SGD}
+
+\begin{equation}
+  \vth_{t+1} = \vth_t - \eta\,(\mathbf{g}_t + \lambda\vth_t).
+  \label{eq:sgd}
+\end{equation}
+Es el descenso por gradiente estocástico de la Sección~\ref{sec:gradiente}. Sumar $\lambda\vth$ al gradiente equivale a
+minimizar $J + \frac{\lambda}{2}\lVert\vth\rVert^2$ (regularización L2), y también a multiplicar los pesos por $(1 - \eta\lambda)$
+antes de cada paso (\emph{decaimiento de pesos}); en SGD las dos cosas son lo mismo. Se usa $\lambda = 10^{-4}$.
+
+Por el análisis de la Sección~\ref{sec:gradiente}, en una dirección de curvatura $L$ el paso debe cumplir $\eta < 2/L$ para no
+diverger, y la velocidad de convergencia está limitada por la dirección más plana: con el mejor paso fijo,
+$\eta = 2/(L + \mu)$, el error se reduce en un factor $(\kappa - 1)/(\kappa + 1)$ por iteración en una cuadrática con número de
+condición $\kappa$.
+
+\subsection{Momentum \parencite{polyak1964}}
+
+El método de la ``bola pesada'' agrega una velocidad que acumula los gradientes pasados:
+\begin{equation}
+  \mathbf{v}_{t+1} = \mu\,\mathbf{v}_t + \mathbf{g}_t, \qquad \vth_{t+1} = \vth_t - \eta\,\mathbf{v}_{t+1},
+  \qquad \mu = 0{,}9.
+  \label{eq:momentum}
+\end{equation}
+Desarrollando, $\mathbf{v}_{t+1} = \sum_{k \ge 0}\mu^k\mathbf{g}_{t-k}$: un promedio de los gradientes con peso exponencial (memoria
+de unos $1/(1-\mu) = 10$ pasos). Eliminando $\mathbf{v}$ se obtiene la forma clásica
+\begin{equation}
+  \vth_{t+1} = \vth_t - \eta\,\mathbf{g}_t + \mu\,(\vth_t - \vth_{t-1}).
+  \label{eq:heavy_ball}
+\end{equation}
+Dos efectos explican por qué ayuda. En las direcciones donde el gradiente cambia de signo de un paso a otro (las paredes de
+un valle angosto) los términos se cancelan y la oscilación se amortigua. En las direcciones donde el gradiente es
+consistente (el fondo del valle) se suman, y el paso crece.
+
+\paragraph{Paso efectivo.} Si el gradiente es aproximadamente constante, $\mathbf{v}$ converge a $\mathbf{g}/(1 - \mu)$ y el paso es
+\begin{equation}
+  \eta_\text{ef} = \frac{\eta}{1 - \mu} = 10\,\eta.
+  \label{eq:paso_efectivo}
+\end{equation}
+Por eso las tasas de Momentum y Nesterov se buscan en una grilla diez veces menor que la de SGD
+(Tabla~\ref{tab:tasas}), y las tasas se comparan entre estos tres métodos por su paso efectivo.
+
+\paragraph{Análisis en la cuadrática.} Sea $J(\vth) = \frac12\vth^\top A\vth$ con $A$ simétrica y autovalores en $[\mu_A, L]$,
+$\kappa = L/\mu_A$, y gradiente exacto. En la base de autovectores las coordenadas se desacoplan, y en una dirección de
+autovalor $a$ la recursión~\eqref{eq:heavy_ball} es lineal de segundo orden:
+\begin{equation}
+  x_{t+1} = (1 + \mu - \eta a)\,x_t - \mu\,x_{t-1}.
+\end{equation}
+
+\begin{proposicion}
+\label{prop:momentum}
+\begin{enumerate}
+  \item La recursión converge a cero si y solo si $0 < \eta a < 2(1 + \mu)$, con $0 \le \mu < 1$.
+  \item Si $(1 - \sqrt\mu)^2 \le \eta a \le (1 + \sqrt\mu)^2$, el factor de convergencia es exactamente $\sqrt\mu$.
+  \item Con $\eta = \dfrac{4}{(\sqrt L + \sqrt{\mu_A})^2}$ y $\sqrt\mu = \dfrac{\sqrt\kappa - 1}{\sqrt\kappa + 1}$, todas las direcciones
+        convergen con factor
+        \begin{equation}
+          \frac{\sqrt\kappa - 1}{\sqrt\kappa + 1}
+          \qquad\text{frente a}\qquad
+          \frac{\kappa - 1}{\kappa + 1}
+          \ \text{del descenso por gradiente con el mejor paso.}
+          \label{eq:tasa_momentum}
+        \end{equation}
+\end{enumerate}
+\end{proposicion}
+\begin{proof}
+Las soluciones son $x_t = c_1r_1^t + c_2r_2^t$, con $r_{1,2}$ raíces de $p(r) = r^2 - (1 + \mu - \eta a)\,r + \mu$. Convergen si
+y solo si $|r_{1,2}| < 1$.
+
+(1) Por el criterio de Jury, un polinomio $r^2 + c_1r + c_0$ tiene las dos raíces en el disco unidad si y solo si $|c_0| < 1$,
+$p(1) = 1 + c_1 + c_0 > 0$ y $p(-1) = 1 - c_1 + c_0 > 0$. Aquí $c_0 = \mu$, $p(1) = \eta a$ y $p(-1) = 2(1 + \mu) - \eta a$.
+
+(2) Las raíces son complejas conjugadas cuando el discriminante es negativo, $(1 + \mu - \eta a)^2 \le 4\mu$, es decir
+$|1 + \mu - \eta a| \le 2\sqrt\mu$, que equivale a $(1 - \sqrt\mu)^2 \le \eta a \le (1 + \sqrt\mu)^2$. En ese caso
+$|r_1|^2 = |r_2|^2 = r_1r_2 = \mu$, el término independiente: el módulo es $\sqrt\mu$ sin importar $a$.
+
+(3) Se eligen $\eta$ y $\mu$ para que el intervalo de (2) sea exactamente $[\eta\mu_A, \eta L]$:
+$1 - \sqrt\mu = \sqrt{\eta\mu_A}$ y $1 + \sqrt\mu = \sqrt{\eta L}$. Sumando, $2 = \sqrt\eta(\sqrt L + \sqrt{\mu_A})$; restando,
+$2\sqrt\mu = \sqrt\eta(\sqrt L - \sqrt{\mu_A})$. Dividiendo, $\sqrt\mu = (\sqrt L - \sqrt{\mu_A})/(\sqrt L + \sqrt{\mu_A})$, y dividiendo
+numerador y denominador por $\sqrt{\mu_A}$ se obtiene~\eqref{eq:tasa_momentum}.
+
+Para el descenso por gradiente ($\mu = 0$) el factor en la dirección $a$ es $|1 - \eta a|$; el peor caso sobre
+$a \in [\mu_A, L]$ se minimiza igualando los extremos, $1 - \eta\mu_A = \eta L - 1$, lo que da $\eta = 2/(L + \mu_A)$ y factor
+$(L - \mu_A)/(L + \mu_A) = (\kappa - 1)/(\kappa + 1)$.
+\end{proof}
+
+La ganancia está en reemplazar $\kappa$ por $\sqrt\kappa$. Para reducir el error en un factor $\epsilon$ hacen falta del orden de
+$\frac{\kappa}{2}\log\frac1\epsilon$ iteraciones sin momento y $\frac{\sqrt\kappa}{2}\log\frac1\epsilon$ con momento. Con el
+$\kappa \approx 528$ de la regresión logística de Bonn (Sección~\ref{sec:gradiente}): los factores son $0{,}9962$ y $0{,}9166$, y
+para reducir la distancia al óptimo en 12 órdenes de magnitud hacen falta unas 7\,300 iteraciones sin momento y unas 320 con
+momento.
+
+El punto (1) también es informativo: con $\mu = 0{,}9$ la región estable llega hasta $\eta a < 3{,}8$, mientras que sin momento
+llega hasta $\eta a < 2$. Medido en paso efectivo~\eqref{eq:paso_efectivo}, la condición con momento es
+$\eta_\text{ef}\,a < 38$: a igual paso efectivo, el momento tolera curvaturas mucho mayores. Este análisis vale para una
+cuadrática con gradiente exacto; con la pérdida no convexa de la CNN y gradientes estocásticos es solo una guía. En
+particular, el $\mu$ óptimo depende de $\kappa$, que no se conoce, y en la práctica se fija $\mu = 0{,}9$.
+
+\subsection{Nesterov \parencite{nesterov1983,sutskever2013}}
+
+El gradiente acelerado de Nesterov evalúa el gradiente en el punto al que el momento va a llevar los parámetros, no en el
+punto actual:
+\begin{equation}
+  \mathbf{v}_{t+1} = \mu\,\mathbf{v}_t + \nabla J(\vth_t - \eta\mu\,\mathbf{v}_t), \qquad \vth_{t+1} = \vth_t - \eta\,\mathbf{v}_{t+1}.
+  \label{eq:nesterov}
+\end{equation}
+Si el momento está por pasarse del mínimo, el gradiente en el punto adelantado ya apunta hacia atrás y frena antes. Para
+funciones convexas $L$-suaves, la versión original alcanza un error $O(1/k^2)$ en lugar del $O(1/k)$ del
+Teorema~\ref{teo:convergencia}, que es la mejor tasa posible para métodos que solo usan gradientes; para funciones
+$\mu$-fuertemente convexas el factor por iteración es $1 - 1/\sqrt\kappa$.
+
+PyTorch usa una forma equivalente que evita calcular el gradiente en otro punto, cambiando de variable al punto adelantado
+\parencite{sutskever2013}:
+\begin{equation}
+  \mathbf{v}_{t+1} = \mu\,\mathbf{v}_t + \mathbf{g}_t, \qquad \vth_{t+1} = \vth_t - \eta\,(\mathbf{g}_t + \mu\,\mathbf{v}_{t+1}).
+\end{equation}
+Comparada con~\eqref{eq:momentum}, el paso usa el gradiente actual con peso $1 + \mu$ y la velocidad vieja con peso $\mu^2$:
+reacciona más rápido a un cambio de dirección. El paso efectivo con gradiente constante es el mismo, $\eta/(1 - \mu)$.
+
+\subsection{RMSprop \parencite{tieleman2012}}
+
+Los métodos anteriores usan la misma tasa para todos los parámetros. Pero en una red los gradientes de distintas capas
+pueden diferir en órdenes de magnitud (Sección~\ref{sec:bn_escala}). RMSprop divide cada coordenada por una estimación de la
+magnitud típica de su gradiente:
+\begin{equation}
+  \mathbf{s}_{t+1} = \rho\,\mathbf{s}_t + (1 - \rho)\,\mathbf{g}_t^2, \qquad
+  \vth_{t+1} = \vth_t - \eta\,\frac{\mathbf{g}_t}{\sqrt{\mathbf{s}_{t+1}} + \epsilon},
+  \qquad \rho = 0{,}99,\ \epsilon = 10^{-8}.
+  \label{eq:rmsprop}
+\end{equation}
+$\mathbf{s}$ es un promedio exponencial de los cuadrados, con memoria de unos 100 pasos, y $\sqrt{\mathbf{s}}$ es la raíz cuadrática
+media (RMS) reciente de cada coordenada. Si el gradiente de una coordenada tiene magnitud estable $|g|$, el paso en esa
+coordenada es $\approx\eta\,\mathrm{signo}(g)$: \textbf{la tasa queda medida en unidades del parámetro}, no del gradiente. Por eso
+los métodos adaptativos usan tasas mucho más chicas que SGD ($10^{-3}$ en lugar de $10^{-1}$) y por eso sus tasas no se
+pueden comparar con las de SGD.
+
+Formalmente es un \emph{precondicionamiento diagonal}: un paso de descenso por gradiente con la métrica
+$D = \operatorname{diag}(\sqrt{\mathbf{s}} + \epsilon)$, $\vth_{t+1} = \vth_t - \eta D^{-1}\mathbf{g}_t$. Si la Hessiana fuera diagonal y
+$\sqrt{\mathbf{s}}$ fuera proporcional a sus entradas, $D^{-1}$ la llevaría a la identidad y el número de condición a 1. En general
+la Hessiana no es diagonal y la corrección es parcial.
+
+Un detalle de la implementación: PyTorch inicia $\mathbf{s}_0 = \mathbf{0}$ y no corrige el sesgo. En el primer paso
+$\mathbf{s}_1 = 0{,}01\,\mathbf{g}_0^2$ y el paso es $\eta\,\mathbf{g}_0/(0{,}1|\mathbf{g}_0|) = 10\,\eta$ por coordenada. Los primeros pasos de RMSprop son
+entonces hasta diez veces más grandes que los siguientes, hasta que $\mathbf{s}$ se llena (unos 100 pasos, cerca de
+una época y media).
+
+\subsection{Adam \parencite{kingma2015}}
+
+Adam combina el momento (un promedio exponencial del gradiente) con la normalización de RMSprop, y corrige el sesgo de
+inicializar los promedios en cero:
+\begin{align}
+  \mathbf{m}_{t+1} &= \beta_1\mathbf{m}_t + (1 - \beta_1)\,\mathbf{g}_t, &
+  \mathbf{s}_{t+1} &= \beta_2\mathbf{s}_t + (1 - \beta_2)\,\mathbf{g}_t^2, \nonumber\\
+  \hat{\mathbf{m}} &= \frac{\mathbf{m}_{t+1}}{1 - \beta_1^{t+1}}, &
+  \hat{\mathbf{s}} &= \frac{\mathbf{s}_{t+1}}{1 - \beta_2^{t+1}}, \label{eq:adam}\\
+  \vth_{t+1} &= \vth_t - \eta\,\frac{\hat{\mathbf{m}}}{\sqrt{\hat{\mathbf{s}}} + \epsilon}, &
+  &\beta_1 = 0{,}9,\ \beta_2 = 0{,}999,\ \epsilon = 10^{-8}. \nonumber
+\end{align}
+
+\paragraph{Corrección del sesgo.} Desarrollando, $\mathbf{m}_t = (1 - \beta_1)\sum_{k=0}^{t-1}\beta_1^{k}\mathbf{g}_{t-1-k}$. Si los
+gradientes tuvieran esperanza constante $\bar{\mathbf{g}}$,
+\[
+  \E[\mathbf{m}_t] = (1 - \beta_1)\sum_{k=0}^{t-1}\beta_1^k\,\bar{\mathbf{g}} = (1 - \beta_1^t)\,\bar{\mathbf{g}},
+\]
+y dividir por $1 - \beta_1^t$ da un estimador insesgado. Lo mismo para $\mathbf{s}$ con $\beta_2$. Sin corregir, con
+$\beta_2 = 0{,}999$ el denominador sería casi cero en los primeros cientos de pasos y los pasos, enormes (el problema que se
+señaló en RMSprop, pero cien veces peor).
+
+\paragraph{Tamaño del paso.} Si en una coordenada el gradiente es consistente, $\hat m \approx \sqrt{\hat s}$ y el paso es
+$\approx\eta$. Si es ruido alrededor de cero, $\hat m$ es chico frente a $\sqrt{\hat s}$ y el paso se achica. El cociente
+$\hat{\mathbf{m}}/\sqrt{\hat{\mathbf{s}}}$ funciona como una relación señal/ruido por coordenada. El paso también es invariante a
+reescalar la pérdida por una constante, porque el factor se cancela entre numerador y denominador.
+
+\paragraph{Decaimiento de pesos acoplado.} PyTorch implementa el \texttt{weight\_decay} de Adam sumándolo al gradiente,
+$\mathbf{g}_t \leftarrow \mathbf{g}_t + \lambda\vth_t$, \emph{antes} de calcular $\mathbf{m}$ y $\mathbf{s}$. Se usa $\lambda = 10^{-4}$.
+
+\subsection{AdamW \parencite{loshchilov2019}}
+
+En SGD, sumar $\lambda\vth$ al gradiente y achicar los pesos son lo mismo. En Adam no: el término $\lambda\vth$ entra en
+$\hat{\mathbf{m}}$ y después se divide por $\sqrt{\hat{\mathbf{s}}}$. Si se ignora el momento, la parte del paso que viene de la
+regularización en la coordenada $j$ es
+\begin{equation}
+  \eta\,\frac{\lambda\,\theta_j}{\sqrt{\hat s_j} + \epsilon}.
+\end{equation}
+Los parámetros con gradientes grandes ($\hat s_j$ grande) casi no se regularizan, y los que tienen gradientes chicos se
+regularizan mucho. El resultado ya no corresponde a minimizar $J + \frac{\lambda}{2}\lVert\vth\rVert^2$, ni a ninguna penalización
+fija, porque $\hat{\mathbf{s}}$ cambia durante el entrenamiento. AdamW \emph{desacopla} el decaimiento y lo aplica directamente
+sobre los pesos:
+\begin{equation}
+  \vth_{t+1} = (1 - \eta\lambda)\,\vth_t - \eta\,\frac{\hat{\mathbf{m}}}{\sqrt{\hat{\mathbf{s}}} + \epsilon},
+  \label{eq:adamw}
+\end{equation}
+con $\hat{\mathbf{m}}$ y $\hat{\mathbf{s}}$ calculados con el gradiente de $J$ solo. Ahora todos los pesos se achican en la misma
+proporción. Como el factor $\eta\lambda$ es mucho menor que en SGD (porque $\eta$ es chico), se usa un $\lambda$ mayor:
+$\lambda = 10^{-2}$, el valor por defecto de PyTorch.
+
+En este experimento el efecto es pequeño. Con $\eta = 3\times10^{-4}$, cada paso multiplica los pesos por
+$1 - 3\times10^{-6}$; en unos 2100 pasos (Sección~\ref{sec:diseno}) eso es un factor $0{,}994$. La diferencia entre Adam y AdamW
+se reduce a esa leve contracción y a la forma en que se regularizan los parámetros con gradientes chicos.
+
+\subsection{Resumen}
+
+\begin{table}[ht]
+\centering
+\caption{Los seis optimizadores comparados. ``Paso'' indica qué controla $\eta$: un múltiplo del gradiente o una magnitud en
+unidades del parámetro.}
+\label{tab:optimizadores}
+\small
+\begin{tabular}{lllll}
+\toprule
+Optimizador & Momento & Adaptativo & Decaimiento & Paso \\
+\midrule
+SGD      & no                    & no & L2, $\lambda = 10^{-4}$          & $\eta\,\mathbf{g}$ \\
+Momentum & $\mu = 0{,}9$         & no & L2, $\lambda = 10^{-4}$          & $\approx 10\,\eta\,\mathbf{g}$ \\
+Nesterov & $\mu = 0{,}9$, adelantado & no & L2, $\lambda = 10^{-4}$      & $\approx 10\,\eta\,\mathbf{g}$ \\
+RMSprop  & no                    & $\rho = 0{,}99$ & acoplado, $10^{-4}$ & $\approx\eta$ por coordenada \\
+Adam     & $\beta_1 = 0{,}9$     & $\beta_2 = 0{,}999$ & acoplado, $10^{-4}$ & $\approx\eta$ por coordenada \\
+AdamW    & $\beta_1 = 0{,}9$     & $\beta_2 = 0{,}999$ & desacoplado, $10^{-2}$ & $\approx\eta$ por coordenada \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+El decaimiento de pesos se aplica a todos los parámetros, incluidos los sesgos y los $\gamma, \beta$ de la normalización por
+lotes.
+
+\subsection{Qué dice la teoría sobre la generalización}
+
+Las garantías de esta sección son sobre la \emph{pérdida de entrenamiento} y en problemas convexos. En una red, lo que
+interesa es el desempeño sobre pacientes que no se usaron para entrenar, y para eso no hay teoremas comparables. Hay dos
+observaciones empíricas que sirven para interpretar los resultados:
+\begin{itemize}
+  \item \textcite{wilson2017} encontraron, en varios problemas de clasificación, que los métodos adaptativos (RMSprop, Adam)
+        llegan a pérdidas de entrenamiento iguales o menores que SGD pero generalizan peor, y dieron un ejemplo construido
+        donde la solución a la que converge Adam es peor que la de SGD.
+  \item Con pasos grandes, el ruido del gradiente estocástico impide que el optimizador se asiente en mínimos angostos, donde
+        la pérdida sube rápido al moverse un poco, y lo empuja hacia regiones más planas, que suelen generalizar mejor
+        \parencite{goodfellow2016}. Según esta idea, lo que importa no es tanto el algoritmo como el tamaño del paso, y la
+        relación entre la tasa de aprendizaje y el tamaño del lote.
+\end{itemize}
+El Capítulo~\ref{cap:resultados} pone a prueba estas dos ideas en este problema.
+
+\section{Diseño experimental}
+\label{sec:diseno}
+
+\subsection{Datos por época}
+
+Con la partición fija (Tabla~\ref{tab:particion}), el entrenamiento tiene 403 ventanas ictales y unas 84\,400 sin crisis
+(excluidas las de borde). Usar todas en cada época sería lento y la pérdida quedaría dominada por las ventanas normales. En
+cada época se toman:
+\begin{itemize}
+  \item las 403 ventanas ictales;
+  \item $10 \times 403 = 4030$ ventanas sin crisis elegidas al azar sin reposición, \emph{distintas en cada época}.
+\end{itemize}
+Son 4433 ventanas, mezcladas y divididas en 70 lotes de 64. En 30 épocas (unos 2100 pasos de optimización) la red ve
+unas 120\,000 ventanas normales, más que las que hay: cada una aparece en promedio 1,4 veces. Una de cada 11 ventanas de
+entrenamiento es ictal, frente a una de cada 210 en los datos de entrenamiento. Este submuestreo solo desplaza los logits (como el peso
+de clases de la Sección~\ref{sec:neyman_pearson}), no cambia el orden de los puntajes que la red busca aprender, y el umbral
+se fija después con Neyman-Pearson sobre datos con la proporción real.
+
+\subsection{Validación y elección de la época}
+
+Después de cada época se evalúa la red sobre un subconjunto fijo del paciente de validación (chb01): sus 107 ventanas
+ictales y 10\,000 ventanas sin crisis elegidas al azar una sola vez, iguales para todas las corridas. Se guarda la red de la
+época con \textbf{mayor AUC de validación} (\emph{early stopping}: las 30 épocas se corren siempre, pero se conserva la mejor).
+Si la pérdida o los puntajes dejan de ser números finitos, la corrida se corta y se informa como divergente. Al final, la red
+guardada se evalúa sobre las 36\,496 ventanas de chb01 y las 79\,221 de prueba.
+
+\subsection{Tasas de aprendizaje}
+
+Cada optimizador tiene su escala natural de tasas (Sección~\ref{sec:optimizadores}), así que no tiene sentido usar la misma
+grilla para todos. Se prueban tres valores por optimizador, separados por factores de aproximadamente 3, alrededor de los valores
+habituales (Tabla~\ref{tab:tasas}).
+
+\begin{table}[ht]
+\centering
+\caption{Tasas de aprendizaje probadas. Para Momentum y Nesterov se indica entre paréntesis el paso efectivo
+$\eta/(1 - \mu)$, comparable con la tasa de SGD.}
+\label{tab:tasas}
+\begin{tabular}{lccc}
+\toprule
+Optimizador & \multicolumn{3}{c}{Tasas $\eta$} \\
+\midrule
+SGD               & 0,3 & 0,1 & 0,03 \\
+Momentum, Nesterov & 0,03 (0,3) & 0,01 (0,1) & 0,003 (0,03) \\
+RMSprop, Adam, AdamW & $3\times10^{-3}$ & $10^{-3}$ & $3\times10^{-4}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Con la grilla elegida así, SGD, Momentum y Nesterov recorren los mismos pasos efectivos (0,03, 0,1 y 0,3).
+
+\subsection{Protocolo}
+
+\begin{enumerate}
+  \item \textbf{Búsqueda de tasa.} Cada optimizador con sus 3 tasas y semilla 0: 18 corridas de 30 épocas. Para cada
+        optimizador se elige la tasa con mayor AUC de validación.
+  \item \textbf{Semillas.} Cada optimizador con su tasa elegida y 5 semillas (0 a 4; la 0 ya está de la búsqueda): 24
+        corridas más. La semilla fija la inicialización de los pesos (la de PyTorch por defecto: uniforme con escala
+        $1/\sqrt{\text{fan\_in}}$), las ventanas normales de cada época, el orden de los lotes y las máscaras de dropout. Se
+        informan media, desvío, mínimo y máximo del AUC de prueba, y se compara cada optimizador contra el mejor con el test
+        de Mann-Whitney y corrección de Bonferroni (Sección~\ref{sec:tests}).
+  \item \textbf{Modelo final.} Se elige el optimizador con mayor AUC de validación medio y, dentro de él, la semilla con mayor
+        AUC de validación. Ese modelo se evalúa con las métricas clínicas: suavizado causal de 3 ventanas, umbral de
+        Neyman-Pearson con $\alpha = 10^{-3}$ calculado sobre las ventanas sin crisis de chb01, sensibilidad por evento,
+        falsas alarmas por hora y latencia (Capítulo~\ref{cap:metricas}).
+  \item \textbf{Experimento de sensibilidad} (\emph{exploratorio}). Después de ver los resultados de prueba se agregó una
+        fase en la que cada optimizador se corre con la tasa más alta de su grilla y 5 semillas. Como se diseñó mirando la
+        prueba, no se usa para elegir nada; sirve para entender los resultados del paso 2.
+\end{enumerate}
+
+Ninguna decisión de los pasos 1 a 3 usa el conjunto de prueba. El paso 4 se informa separado y con esa advertencia.
+
+\subsection{Costo}
+
+Todo se corrió en CPU (Ryzen 7 5700U, 8 núcleos, sin GPU). Cada corrida de 30 épocas tarda entre 92 y 94~s, incluida la
+evaluación por época. Las 42 corridas del diseño original más las 20 del experimento de sensibilidad suman unas
+1,6 horas. Los espectrogramas de las 200\,563 ventanas se cargan en memoria en media precisión (unos 2~GB). El costo
+fue el que determinó usar una partición fija y no validación cruzada por paciente para la CNN, una decisión que el
+Capítulo~\ref{cap:resultados} muestra que tuvo consecuencias.

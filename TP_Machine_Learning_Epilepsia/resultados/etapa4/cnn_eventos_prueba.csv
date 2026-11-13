@@ -1,0 +1,15 @@
+archivo,inicio_s,fin_s,detectada,latencia_s
+chb03_01.edf,362,414,True,10.0
+chb03_02.edf,731,796,True,13.0
+chb03_03.edf,432,501,True,8.0
+chb03_04.edf,2162,2214,True,6.0
+chb03_34.edf,1982,2029,False,
+chb03_35.edf,2592,2656,False,
+chb03_36.edf,1725,1778,False,
+chb10_12.edf,6313,6348,True,11.0
+chb10_20.edf,6888,6958,True,12.0
+chb10_27.edf,2382,2447,True,10.0
+chb10_30.edf,3021,3079,True,27.0
+chb10_31.edf,3801,3877,True,11.0
+chb10_38.edf,4618,4707,True,6.0
+chb10_89.edf,1383,1437,True,17.0

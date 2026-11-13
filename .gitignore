@@ -1,0 +1,33 @@
+# Libros (copyright): PDF originales y traducciones
+/*.pdf
+*_traduccion/
+PIPELINE_LIBROS/pipeline/data/
+
+# Archivos comprimidos
+*.rar
+*.zip
+
+# Datos crudos y procesados (se descargan/regeneran con los scripts)
+datos/
+data/
+
+# Entornos y dependencias
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Respaldos
+_backup*/
+*.bak_*
+
+# Herramientas locales
+opencode.json
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store
+~$*
