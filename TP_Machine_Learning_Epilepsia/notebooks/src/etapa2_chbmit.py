@@ -38,6 +38,8 @@ except ImportError:
 import sys
 sys.path.insert(0, str(RAIZ / "scripts"))
 import preprocesar_chbmit as P
+import estilo_graficos as EG
+EG.aplicar()
 
 DATOS = RAIZ / "datos" / "chbmit"
 PROC = RAIZ / "datos" / "chbmit_proc"
@@ -89,12 +91,16 @@ t = np.arange(seg.shape[1]) / P.FS + a
 fig, ax = plt.subplots(figsize=(12, 9))
 sep = 250
 for k, nombre in enumerate(P.CANALES):
-    ax.plot(t, seg[k] - k * sep, lw=0.4, color="k")
-ax.set_yticks(-np.arange(len(P.CANALES)) * sep, [c.replace("-0", "") for c in P.CANALES], fontsize=7)
-ax.axvspan(2996, 3036, color="crimson", alpha=0.12, label="crisis anotada")
-ax.set_xlim(a, b); ax.set_xlabel("tiempo [s]"); ax.legend(loc="upper right")
+    ax.plot(t, seg[k] - k * sep, lw=0.45, color=EG.TINTA)
+ax.set_yticks(-np.arange(len(P.CANALES)) * sep, [c.replace("-0", "") for c in P.CANALES], fontsize=9)
+ax.axvspan(2996, 3036, color=EG.ROJO, alpha=0.13, lw=0, label="crisis anotada")
+for lim in (2996, 3036):
+    ax.axvline(lim, color=EG.ROJO, lw=1, ls="--")
+ax.set_xlim(a, b); ax.set_ylim(-(len(P.CANALES) - 0.3) * sep, 1.2 * sep)
+ax.set_xlabel("tiempo [s]"); ax.legend(loc="upper right", frameon=True, facecolor="white", edgecolor="none")
+ax.grid(axis="y", visible=False); ax.spines["left"].set_visible(False); ax.tick_params(axis="y", length=0)
 ax.set_title(f"chb01_03 — 18 canales bipolares, filtro 0,5–40 Hz (separación {sep} µV)")
-fig.tight_layout(); fig.savefig(SALIDA / "chb01_03_crisis_cruda.png", dpi=150)
+fig.tight_layout(); fig.savefig(SALIDA / "chb01_03_crisis_cruda.png")
 
 # %% [markdown]
 # ## 2.3 Espectrograma alrededor de la crisis
@@ -107,11 +113,16 @@ canal = int(np.argmax(seg[:, (2996 - a) * P.FS:(3036 - a) * P.FS].std(axis=1)))
 fs_, ts_, Sxx = signal.spectrogram(x[canal, 2800 * P.FS: 3200 * P.FS], fs=P.FS, window="hann",
                                    nperseg=512, noverlap=256)
 fig, ax = plt.subplots(figsize=(11, 4))
-im = ax.pcolormesh(ts_ + 2800, fs_, 10 * np.log10(Sxx + 1e-6), shading="auto", cmap="magma")
-ax.axvline(2996, c="cyan", ls="--"); ax.axvline(3036, c="cyan", ls="--")
-ax.set_ylim(0, 40); ax.set_xlabel("tiempo [s]"); ax.set_ylabel("frecuencia [Hz]")
+S_db = 10 * np.log10(Sxx + 1e-6)
+vis = S_db[fs_ <= 40]
+im = ax.pcolormesh(ts_ + 2800, fs_, S_db, shading="gouraud", cmap=EG.CMAP_ESPECTRO, rasterized=True,
+                   vmin=np.percentile(vis, 1), vmax=vis.max())
+ax.axvline(2996, c=EG.CIAN, ls="--", lw=1.4); ax.axvline(3036, c=EG.CIAN, ls="--", lw=1.4)
+ax.text(3016, 38, "crisis", color=EG.CIAN, ha="center", va="top", fontsize=10.5, fontweight="semibold")
+ax.set_ylim(0, 40); ax.set_xlabel("tiempo [s]"); ax.set_ylabel("frecuencia [Hz]"); ax.grid(False)
 ax.set_title(f"Espectrograma canal {P.CANALES[canal]} (el de mayor amplitud durante la crisis)")
-fig.colorbar(im, label="dB"); fig.tight_layout(); fig.savefig(SALIDA / "chb01_03_espectrograma.png", dpi=150)
+cb = fig.colorbar(im, label="dB", pad=0.015); cb.outline.set_visible(False)
+fig.tight_layout(); fig.savefig(SALIDA / "chb01_03_espectrograma.png")
 
 # %% [markdown]
 # **Observaciones:**
@@ -174,18 +185,21 @@ fig, ejes = plt.subplots(1, len(PACIENTES), figsize=(15, 3.8), sharey=True)
 filas = []
 for ax, p in zip(ejes, PACIENTES):
     m = (D["paciente"] == p) & limpio
-    for etiqueta, color, desp in [(0, "steelblue", -0.18), (1, "crimson", 0.18)]:
+    for etiqueta, color, desp in [(0, EG.AZUL, -0.18), (1, EG.ROJO, 0.18)]:
         v = bp_media[m & (D["ictal"] == etiqueta)]
-        ax.boxplot(v, positions=np.arange(5) + desp, widths=0.3, showfliers=False,
-                   patch_artist=True, boxprops=dict(facecolor=color, alpha=0.5))
+        ax.boxplot(v, positions=np.arange(5) + desp, widths=0.3, showfliers=False, patch_artist=True,
+                   boxprops=dict(facecolor=color, alpha=0.35, edgecolor=color, lw=1.2),
+                   medianprops=dict(color=color, lw=2), whiskerprops=dict(color=color, lw=1.1),
+                   capprops=dict(color=color, lw=1.1))
     for j, banda in enumerate(BANDAS):
         filas.append({"paciente": p, "banda": banda,
                       "dif_log10": bp_media[m & (D["ictal"] == 1), j].mean() - bp_media[m & (D["ictal"] == 0), j].mean()})
-    ax.set_xticks(range(5), BANDAS, rotation=45, fontsize=8); ax.set_title(p)
+    ax.set_xticks(range(5), BANDAS, rotation=45, fontsize=9.5); ax.set_title(p, loc="center")
+    ax.grid(axis="x", visible=False)
 ejes[0].set_ylabel(r"$\log_{10}$ potencia [µV²]")
-fig.legend([plt.Rectangle((0, 0), 1, 1, fc="steelblue", alpha=0.5), plt.Rectangle((0, 0), 1, 1, fc="crimson", alpha=0.5)],
+fig.legend([plt.Rectangle((0, 0), 1, 1, fc=EG.AZUL, alpha=0.45), plt.Rectangle((0, 0), 1, 1, fc=EG.ROJO, alpha=0.45)],
            ["sin crisis", "crisis"], loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.02))
-fig.tight_layout(rect=(0, 0.06, 1, 1)); fig.savefig(SALIDA / "potencia_bandas_por_paciente.png", dpi=150)
+fig.tight_layout(rect=(0, 0.06, 1, 1)); fig.savefig(SALIDA / "potencia_bandas_por_paciente.png")
 dif = pd.DataFrame(filas).pivot(index="paciente", columns="banda", values="dif_log10")[BANDAS].round(2)
 dif.to_csv(SALIDA / "diferencia_log_potencia_crisis.csv")
 print("Diferencia media de log10(potencia), crisis menos sin crisis (1 = 10 veces más potencia):")

@@ -27,12 +27,14 @@ except ImportError:
 sys.path.insert(0, str(RAIZ / "scripts"))
 import metricas as M
 import entrenar_cnn as E
+import estilo_graficos as EG
+EG.aplicar()
 
 BASE = RAIZ / "resultados" / "etapa4"
 CORR = BASE / "corridas"
 SALIDA = BASE
 ORDEN = list(E.OPTIMIZADORES)
-COLOR = dict(zip(ORDEN, plt.cm.tab10.colors))
+COLOR = EG.OPTIMIZADOR
 print("RAIZ:", RAIZ)
 
 # %% [markdown]
@@ -141,16 +143,20 @@ busq.round(4)
 # %%
 fig, ejes = plt.subplots(2, 3, figsize=(15, 7.5), sharey=True)
 for ax, opt in zip(ejes.ravel(), ORDEN):
-    for lr in E.OPTIMIZADORES[opt][0]:
+    tonos = [0.35, 0.65, 1.0]
+    for lr, a_ in zip(sorted(E.OPTIMIZADORES[opt][0]), tonos):
         h = historia[(historia.optimizador == opt) & (historia.lr == lr) & (historia.semilla == 0)]
-        ax.plot(h.epoca, h.perdida_val, lw=2 if lr == elegidas[opt] else 1, label=f"η = {lr:g}")
-    ax.set_title(opt); ax.set_yscale("log"); ax.grid(alpha=0.3); ax.legend(fontsize=8)
+        es = lr == elegidas[opt]
+        ax.plot(h.epoca, h.perdida_val, lw=2.6 if es else 1.3, color=COLOR[opt], alpha=a_ if not es else 1,
+                ls="-" if es else "--", label=f"η = {lr:g}" + (" (elegida)" if es else ""))
+    ax.set_title(opt, color=COLOR[opt]); ax.set_yscale("log"); ax.legend(fontsize=9.5)
 for ax in ejes[1]:
     ax.set_xlabel("época")
 for ax in ejes[:, 0]:
     ax.set_ylabel("pérdida de validación")
-fig.suptitle("Búsqueda de tasa de aprendizaje (semilla 0); línea gruesa = elegida")
-fig.tight_layout(); fig.savefig(SALIDA / "busqueda_lr_curvas.png", dpi=150)
+fig.suptitle("Búsqueda de tasa de aprendizaje (semilla 0); línea gruesa = elegida", x=0.01, ha="left",
+             fontsize=13.5, fontweight="semibold")
+fig.tight_layout(); fig.savefig(SALIDA / "busqueda_lr_curvas.png")
 
 # %% [markdown]
 # ## 4.4 Comparativa con 5 semillas
@@ -182,12 +188,13 @@ for opt in ORDEN:
     g = hs[hs.optimizador == opt].groupby("epoca")
     for ax, col in zip(ejes, ["perdida_entrenamiento", "perdida_val", "error_auc_val"]):
         med, q1, q3 = g[col].median(), g[col].quantile(0.25), g[col].quantile(0.75)
-        ax.plot(med.index, med, color=COLOR[opt], label=opt)
-        ax.fill_between(med.index, q1, q3, color=COLOR[opt], alpha=0.15)
+        ax.plot(med.index, med, color=COLOR[opt], label=opt, lw=2)
+        ax.fill_between(med.index, q1, q3, color=COLOR[opt], alpha=0.13, lw=0)
 for ax, t in zip(ejes, ["pérdida de entrenamiento", "pérdida de validación (chb01)", "1 - AUC de validación (chb01)"]):
-    ax.set_yscale("log"); ax.set_title(t); ax.set_xlabel("época"); ax.grid(alpha=0.3, which="both")
-ejes[0].legend(fontsize=8)
-fig.tight_layout(); fig.savefig(SALIDA / "curvas_optimizadores.png", dpi=150)
+    ax.set_yscale("log"); ax.set_title(t); ax.set_xlabel("época")
+    ax.grid(which="minor", color=EG.GRIS_CLARO, lw=0.4)
+ejes[0].legend(ncol=2)
+fig.tight_layout(); fig.savefig(SALIDA / "curvas_optimizadores.png")
 
 # %% [markdown]
 # **Observaciones:**
@@ -208,13 +215,24 @@ fig.tight_layout(); fig.savefig(SALIDA / "curvas_optimizadores.png", dpi=150)
 # %%
 fig, ax = plt.subplots(figsize=(9, 4.5))
 datos = [sel[sel.optimizador == o].auc_prueba.values for o in ORDEN]
-ax.boxplot(datos, tick_labels=ORDEN, showmeans=True)
+cajas = ax.boxplot(datos, tick_labels=ORDEN, widths=0.5, showfliers=False, patch_artist=True,
+                   medianprops=dict(lw=2.2), whiskerprops=dict(lw=1.1), capprops=dict(lw=1.1))
 for k, d in enumerate(datos):
-    ax.scatter(np.full(len(d), k + 1) + np.random.default_rng(k).uniform(-0.08, 0.08, len(d)), d,
-               color=COLOR[ORDEN[k]], zorder=3, s=22)
-ax.set_ylabel("AUC de prueba (chb03 + chb10)"); ax.grid(alpha=0.3, axis="y")
+    c = COLOR[ORDEN[k]]
+    cajas["boxes"][k].set(facecolor=c, alpha=0.18, edgecolor=c, lw=1.3)
+    cajas["medians"][k].set(color=c)
+    for parte in ("whiskers", "caps"):
+        for ln in cajas[parte][2 * k: 2 * k + 2]:
+            ln.set(color=c)
+    ax.scatter(np.full(len(d), k + 1) + np.random.default_rng(k).uniform(-0.1, 0.1, len(d)), d,
+               color=c, zorder=3, s=44, edgecolors="white", linewidths=0.9)
+    ax.scatter(k + 1, d.mean(), marker="D", s=40, color="white", edgecolors=c, lw=1.6, zorder=4)
+    ax.text(k + 1, d.max() + 0.006, f"{d.mean():.3f}", ha="center", va="bottom", fontsize=9.5, color=c,
+            fontweight="semibold")
+ax.set_ylim(top=max(d.max() for d in datos) + 0.018)
+ax.set_ylabel("AUC de prueba (chb03 + chb10)"); ax.grid(axis="x", visible=False)
 ax.set_title("AUC de prueba por optimizador (5 semillas, mejor tasa de aprendizaje)")
-fig.tight_layout(); fig.savefig(SALIDA / "auc_prueba_por_optimizador.png", dpi=150)
+fig.tight_layout(); fig.savefig(SALIDA / "auc_prueba_por_optimizador.png")
 
 # %% [markdown]
 # ### ¿Las diferencias son significativas?
@@ -277,18 +295,20 @@ print(f"rango del AUC de prueba:     {corridas.auc_prueba.min():.4f} - {corridas
 fig, ejes = plt.subplots(1, 2, figsize=(13, 4.5))
 for opt in ORDEN:
     d = b0[b0.optimizador == opt].sort_values("lr")
-    ejes[0].plot(d.paso_efectivo, d.auc_prueba, "o-", color=COLOR[opt], label=opt)
+    ejes[0].plot(d.paso_efectivo, d.auc_prueba, "o-", color=COLOR[opt], label=opt,
+                 markeredgecolor="white", markeredgewidth=0.8)
     e = d[d.elegida]
-    ejes[0].scatter(e.paso_efectivo, e.auc_prueba, s=140, facecolors="none", edgecolors=COLOR[opt], lw=1.5)
+    ejes[0].scatter(e.paso_efectivo, e.auc_prueba, s=170, facecolors="none", edgecolors=COLOR[opt], lw=1.7)
     d = corridas[corridas.optimizador == opt]
-    ejes[1].scatter(d.auc_val_completo, d.auc_prueba, color=COLOR[opt], s=22, label=opt)
+    ejes[1].scatter(d.auc_val_completo, d.auc_prueba, color=COLOR[opt], s=40, alpha=0.85,
+                    edgecolors="white", linewidths=0.7, label=opt)
 ejes[0].set_xscale("log"); ejes[0].set_xlabel("paso efectivo η/(1-μ)"); ejes[0].set_ylabel("AUC de prueba")
 ejes[0].set_title("Semilla 0: AUC de prueba según la tasa (círculo = elegida)")
 ejes[1].set_xlabel("AUC de validación (chb01)"); ejes[1].set_ylabel("AUC de prueba (chb03 + chb10)")
 ejes[1].set_title(f"{len(corridas)} corridas: validación contra prueba (Spearman ρ = {rho_vp.statistic:.2f})")
 for ax in ejes:
-    ax.grid(alpha=0.3); ax.legend(fontsize=8)
-fig.tight_layout(); fig.savefig(SALIDA / "validacion_vs_prueba.png", dpi=150)
+    ax.legend(fontsize=9.5)
+fig.tight_layout(); fig.savefig(SALIDA / "validacion_vs_prueba.png")
 
 # %% [markdown]
 # **Observaciones:**
@@ -343,13 +363,19 @@ fig, ax = plt.subplots(figsize=(12, 4.3))
 pos = np.arange(len(cols_c))
 for k, opt in enumerate(ORDEN):
     d = por_crisis[(por_crisis.optimizador == opt) & (por_crisis.lr == elegidas[opt])]
-    ax.scatter(np.repeat(pos, len(d)) + (k - 2.5) * 0.11, d[cols_c].to_numpy().T.ravel(), s=12,
-               color=COLOR[opt], label=opt)
-ax.set_xticks(pos, cols_c, rotation=45, ha="right"); ax.axhline(0.5, c="k", ls=":", lw=0.8)
+    ax.scatter(np.repeat(pos, len(d)) + (k - 2.5) * 0.11, d[cols_c].to_numpy().T.ravel(), s=18,
+               color=COLOR[opt], alpha=0.85, edgecolors="white", linewidths=0.4, label=opt)
+for j, cc in enumerate(cols_c):
+    if cc in tardias:
+        ax.axvspan(j - 0.45, j + 0.45, color=EG.ROJO, alpha=0.07, lw=0)
+for j in pos[:-1]:
+    ax.axvline(j + 0.5, color=EG.GRIS_CLARO, lw=0.8)
+ax.set_xticks(pos, cols_c, rotation=45, ha="right"); ax.axhline(0.5, c=EG.GRIS, ls=":", lw=1)
+ax.set_xlim(-0.6, len(cols_c) - 0.4); ax.grid(axis="x", visible=False)
 ax.set_ylabel("percentil del puntaje mediano\nentre las ventanas sin crisis")
 ax.set_title("Cada crisis de prueba en cada corrida (tasa elegida, 5 semillas)")
-ax.grid(alpha=0.3, axis="y"); ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.005, 1.0))
-fig.tight_layout(); fig.savefig(SALIDA / "percentil_por_crisis.png", dpi=150)
+ax.legend(loc="upper left", bbox_to_anchor=(1.005, 1.0), markerscale=1.6)
+fig.tight_layout(); fig.savefig(SALIDA / "percentil_por_crisis.png")
 por_crisis.groupby("optimizador")[["auc_prueba", "AUC_chb03", "AUC_chb10", "percentil_tardias"]].median().reindex(ORDEN).round(3)
 
 # %% [markdown]
@@ -399,15 +425,23 @@ fig, ax = plt.subplots(figsize=(10, 4.5))
 for k, o in enumerate(ORDEN):
     for dx, df_, mk in [(-0.15, sel, "o"), (0.15, sel_alta, "s")]:
         d = df_[df_.optimizador == o].auc_prueba.values
-        ax.scatter(np.full(len(d), k + dx), d, color=COLOR[o], marker=mk, s=24,
-                   facecolors="none" if mk == "s" else COLOR[o])
-        ax.hlines(d.mean(), k + dx - 0.1, k + dx + 0.1, color=COLOR[o], lw=2)
-ax.scatter([], [], c="gray", marker="o", label="tasa elegida por validación")
-ax.scatter([], [], facecolors="none", edgecolors="gray", marker="s", label="tasa más alta de la grilla")
+    medias = []
+    for dx, df_, mk in [(-0.15, sel, "o"), (0.15, sel_alta, "s")]:
+        d = df_[df_.optimizador == o].auc_prueba.values
+        ax.scatter(np.full(len(d), k + dx), d, edgecolors=COLOR[o], marker=mk, s=40, lw=1.3,
+                   facecolors="white" if mk == "s" else COLOR[o], alpha=0.9, zorder=3)
+        ax.hlines(d.mean(), k + dx - 0.11, k + dx + 0.11, color=COLOR[o], lw=2.6, zorder=4)
+        medias.append(d.mean())
+    ax.annotate("", (k + 0.15, medias[1]), (k - 0.15, medias[0]),
+                arrowprops=dict(arrowstyle="->", color=EG.GRIS, lw=1, shrinkA=6, shrinkB=6))
+ax.scatter([], [], c=EG.GRIS, marker="o", label="tasa elegida por validación")
+ax.scatter([], [], facecolors="white", edgecolors=EG.GRIS, marker="s", label="tasa más alta de la grilla")
 ax.set_xticks(range(len(ORDEN)), [f"{o}\n{elegidas[o]:g} | {alta[o]:g}" for o in ORDEN])
-ax.set_ylabel("AUC de prueba"); ax.grid(alpha=0.3, axis="y"); ax.legend(fontsize=8, loc="lower right")
+for etq, o in zip(ax.get_xticklabels(), ORDEN):
+    etq.set_color(COLOR[o])
+ax.set_ylabel("AUC de prueba"); ax.grid(axis="x", visible=False); ax.legend(loc="lower right")
 ax.set_title("AUC de prueba con la tasa elegida y con la tasa más alta (5 semillas, línea = media)")
-fig.tight_layout(); fig.savefig(SALIDA / "tasa_elegida_vs_alta.png", dpi=150)
+fig.tight_layout(); fig.savefig(SALIDA / "tasa_elegida_vs_alta.png")
 display(comp_alta.round(4))
 pr_alta
 
@@ -513,18 +547,24 @@ y_te = te["ictal"][limpio]
 fig, ejes = plt.subplots(1, 2, figsize=(14, 5.3))
 curvas = {"logística (calibrado)": s3["calibrado__logistica"], "SVM lineal (calibrado)": s3["calibrado__svm_lineal"],
           "logística (global)": s3["global__logistica"], f"CNN {opt_final}": st_cnn}
-for nombre_c, s in curvas.items():
+colores_roc = [EG.AZUL, EG.VERDE, EG.GRIS, EG.ROJO]
+for (nombre_c, s), col in zip(curvas.items(), colores_roc):
     fpr, tpr, _ = roc_curve(y_te, s[limpio])
     for ax in ejes:
-        ax.plot(fpr, tpr, lw=1.6 if "CNN" in nombre_c else 1.1, label=f"{nombre_c} (AUC {roc_auc_score(y_te, s[limpio]):.3f})")
-ejes[0].plot([0, 1], [0, 1], "k--", lw=0.7)
+        ax.plot(fpr, tpr, lw=2.6 if "CNN" in nombre_c else 1.5, color=col, zorder=3 if "CNN" in nombre_c else 2,
+                ls="--" if "global" in nombre_c else "-",
+                label=f"{nombre_c} (AUC {roc_auc_score(y_te, s[limpio]):.3f})")
+ejes[0].plot([0, 1], [0, 1], ls="--", c=EG.GRIS, lw=1)
+ejes[0].set_xlim(-0.01, 1); ejes[0].set_ylim(0, 1.01)
 ejes[0].set_title("ROC en prueba (chb03 + chb10)")
-ejes[1].set_xscale("log"); ejes[1].set_xlim(1e-4, 1)
-ejes[1].axvline(1e-3, c="gray", ls=":", lw=0.8); ejes[1].text(1.1e-3, 0.03, "α = 10⁻³", fontsize=8)
+ejes[1].set_xscale("log"); ejes[1].set_xlim(1e-4, 1); ejes[1].set_ylim(0, 1.01)
+ejes[1].axvspan(1e-4, 1e-2, color=EG.AMARILLO, alpha=0.08, lw=0)
+ejes[1].axvline(1e-3, c=EG.TINTA, ls=":", lw=1); ejes[1].text(1.12e-3, 0.95, "α = 10⁻³", fontsize=10, color=EG.TINTA)
+ejes[1].text(1.15e-4, 0.03, "zona útil clínicamente", fontsize=9.5, color="#B07A1F")
 ejes[1].set_title("Misma ROC, eje horizontal logarítmico")
 for ax in ejes:
-    ax.set_xlabel("1 - especificidad"); ax.set_ylabel("sensibilidad"); ax.grid(alpha=0.3); ax.legend(fontsize=8, loc="lower right")
-fig.tight_layout(); fig.savefig(SALIDA / "roc_cnn_vs_convexos.png", dpi=150)
+    ax.set_xlabel("1 - especificidad"); ax.set_ylabel("sensibilidad"); ax.legend(fontsize=9.5, loc="lower right")
+fig.tight_layout(); fig.savefig(SALIDA / "roc_cnn_vs_convexos.png")
 
 # %% [markdown]
 # **Observaciones:**
@@ -542,9 +582,8 @@ fig.tight_layout(); fig.savefig(SALIDA / "roc_cnn_vs_convexos.png", dpi=150)
 # %%
 fig, ax = plt.subplots(figsize=(5, 4.3))
 cm = confusion_matrix(y_te, pred_cnn[limpio])
-ConfusionMatrixDisplay(cm, display_labels=["sin crisis", "crisis"]).plot(ax=ax, cmap="Blues", colorbar=False, values_format="d")
-ax.set_title(f"CNN {opt_final}, prueba, umbral NP")
-fig.tight_layout(); fig.savefig(SALIDA / "confusion_cnn.png", dpi=150)
+EG.matriz_confusion(ax, cm, ["sin crisis", "crisis"], f"CNN {opt_final}, prueba, umbral NP")
+fig.tight_layout(); fig.savefig(SALIDA / "confusion_cnn.png")
 
 # %% [markdown]
 # ## 4.7 Curva sensibilidad por evento contra falsas alarmas por hora
@@ -580,13 +619,21 @@ curva_log = barrido(lg.decision_function(Xc[m_va]), lg.decision_function(Xc[idx3
 curva_log.to_csv(SALIDA / "barrido_alfa_logistica.csv", index=False, float_format="%.4g")
 
 fig, ax = plt.subplots(figsize=(7.5, 5))
-for nombre_c, c, col in [(f"CNN {opt_final}", curva_cnn, "crimson"), ("logística (calibrado)", curva_log, "steelblue")]:
-    ax.plot(c.FA_por_hora, c.sens_eventos, "o-", color=col, label=nombre_c)
+ax.axvspan(0, 1, color=EG.VERDE, alpha=0.06, lw=0)
+ax.text(0.012, 0.03, "≤ 1 falsa alarma por hora", transform=ax.transAxes, fontsize=9.5, color=EG.VERDE)
+for nombre_c, c, col in [(f"CNN {opt_final}", curva_cnn, EG.ROJO), ("logística (calibrado)", curva_log, EG.AZUL)]:
+    ax.plot(c.FA_por_hora, c.sens_eventos, "o-", color=col, label=nombre_c, lw=2.2, ms=7,
+            markeredgecolor="white", markeredgewidth=1)
     for _, r in c.iterrows():
-        ax.annotate(f"{r.alfa:g}", (r.FA_por_hora, r.sens_eventos), fontsize=7, xytext=(3, -9), textcoords="offset points", color=col)
-ax.set_xscale("symlog", linthresh=0.1); ax.set_xlabel("falsas alarmas por hora"); ax.set_ylabel("sensibilidad por evento")
-ax.set_title("Compromiso clínico en prueba (etiquetas: α de Neyman-Pearson)"); ax.grid(alpha=0.3); ax.legend()
-fig.tight_layout(); fig.savefig(SALIDA / "sensibilidad_vs_falsas_alarmas.png", dpi=150)
+        arriba = r.sens_eventos >= 0.999
+        ax.annotate(f"{r.alfa:g}", (r.FA_por_hora, r.sens_eventos), fontsize=8.5, color=col,
+                    xytext=(0, 9 if col == EG.ROJO else -14) if arriba else (5, -12),
+                    ha="center" if arriba else "left", textcoords="offset points")
+ax.set_xscale("symlog", linthresh=0.1); ax.set_xlim(-0.01, 30); ax.set_ylim(0.2, 1.08)
+ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{100 * v:.0f} %"))
+ax.set_xlabel("falsas alarmas por hora"); ax.set_ylabel("sensibilidad por evento")
+ax.set_title("Compromiso clínico en prueba (etiquetas: α de Neyman-Pearson)"); ax.legend(loc="lower right")
+fig.tight_layout(); fig.savefig(SALIDA / "sensibilidad_vs_falsas_alarmas.png")
 pd.concat([curva_cnn.assign(modelo="CNN"), curva_log.assign(modelo="logística")]).round(
     {"sens_eventos": 3, "FA_por_hora": 3, "latencia_mediana_s": 1})
 

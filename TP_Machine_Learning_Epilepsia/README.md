@@ -22,8 +22,9 @@ scripts/
   preprocesar_chbmit.py filtrado, ventanas de 4 s, espectrogramas y potencia por banda
   metricas.py           métricas por ventana y por evento, umbral de Neyman-Pearson
   entrenar_cnn.py       entrenamiento de la CNN (fases busqueda, semillas, posthoc)
+  estilo_graficos.py    paleta y estilo común de todas las figuras
 resultados/etapaN/     figuras, tablas CSV y metadatos de cada etapa
-informe/               informe en LaTeX (para Overleaf)
+informe/               informe en LaTeX y PDF final (Informe_Final_TP_Epilepsia.pdf)
 ```
 
 ## Datos
@@ -67,6 +68,10 @@ python -m venv .venv
 Entorno usado: Python 3.12.10, CPU AMD Ryzen 7 5700U, 21,8 GB de RAM, sin GPU.
 
 ## Informe
+
+El PDF compilado está en [`informe/Informe_Final_TP_Epilepsia.pdf`](informe/Informe_Final_TP_Epilepsia.pdf).
+Para compilarlo localmente (MiKTeX o TeX Live), desde `informe/`: `pdflatex main`, `biber main`, `pdflatex main`
+dos veces.
 
 En `informe/`, `main.tex` incluye un archivo por capítulo (`capitulos/`) y `referencias.bib`. Las figuras ya
 están copiadas en `informe/figuras/etapaN/`. Para compilarlo en Overleaf hay que subir la carpeta `informe/`

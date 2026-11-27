@@ -20,6 +20,7 @@
 # %%
 from pathlib import Path
 import json
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -30,6 +31,9 @@ try:
     RAIZ = Path("/content/drive/MyDrive/TP_Machine_Learning_Epilepsia")
 except ImportError:
     RAIZ = Path.cwd().parents[0] if Path.cwd().name == "notebooks" else Path.cwd()
+sys.path.insert(0, str(RAIZ / "scripts"))
+import estilo_graficos as EG
+EG.aplicar()
 
 DATOS = RAIZ / "datos" / "bonn"
 SALIDA = RAIZ / "resultados" / "etapa1"
@@ -101,10 +105,11 @@ t = np.arange(X.shape[1]) / FS
 fig, ejes = plt.subplots(5, 1, figsize=(11, 10), sharex=True)
 for ax, (s, nom) in zip(ejes, ejemplos.items()):
     i = [k for k, n in enumerate(nombres) if n.upper().startswith(nom)][0]
-    ax.plot(t, X[i], lw=0.5, color="crimson" if s == "E" else "steelblue")
-    ax.set_ylabel("µV"); ax.set_title(f"Set {s} ({nom}) — {DESCRIPCION[s]}", fontsize=9, loc="left")
+    ax.plot(t, X[i], lw=0.55, color=EG.SET_BONN[s])
+    ax.set_ylabel("µV"); ax.set_xlim(0, t[-1]); ax.grid(axis="x", visible=False)
+    ax.set_title(f"Set {s} ({nom}) — {DESCRIPCION[s]}", fontsize=11)
 ejes[-1].set_xlabel("tiempo [s]")
-fig.tight_layout(); fig.savefig(SALIDA / "ejemplos_por_set.png", dpi=150)
+fig.tight_layout(); fig.savefig(SALIDA / "ejemplos_por_set.png")
 
 # %% [markdown]
 # ## 1.3 Transformada discreta de Fourier
@@ -124,11 +129,14 @@ f, P = psd_welch(X)
 fig, ax = plt.subplots(figsize=(10, 5))
 for s in SETS:
     m = np.median(P[y == s], axis=0)
-    ax.semilogy(f, m, label=f"{s}: {DESCRIPCION[s]}", lw=1.4 if s == "E" else 1)
-ax.axvline(40, ls="--", c="gray", lw=0.8); ax.text(40.5, ax.get_ylim()[1] / 3, "40 Hz", fontsize=8)
+    ax.semilogy(f, m, label=f"{s}: {DESCRIPCION[s]}", lw=2.4 if s == "E" else 1.6, color=EG.SET_BONN[s])
+ax.axvspan(40, FS / 2, color=EG.GRIS_CLARO, alpha=0.45, lw=0)
+ax.axvline(40, ls="--", c=EG.GRIS, lw=1)
+ax.text(41, ax.get_ylim()[1] / 3, "eliminado por el\npasabajos de 40 Hz", fontsize=9.5, color=EG.GRIS, va="top")
 ax.set_xlim(0, FS / 2); ax.set_xlabel("frecuencia [Hz]"); ax.set_ylabel("PSD [µV²/Hz] (mediana por set)")
-ax.legend(fontsize=8); ax.grid(alpha=0.3)
-fig.tight_layout(); fig.savefig(SALIDA / "psd_welch_por_set.png", dpi=150)
+ax.set_title("Densidad espectral de potencia (Welch) por set")
+ax.legend(loc="upper right", bbox_to_anchor=(1, 0.86))
+fig.tight_layout(); fig.savefig(SALIDA / "psd_welch_por_set.png")
 
 # %% [markdown]
 # **Observaciones del espectro:**
@@ -180,10 +188,10 @@ tabla.to_csv(SALIDA / "potencia_relativa_bandas_media.csv")
 bp_rel.groupby("set").median().round(3).to_csv(SALIDA / "potencia_relativa_bandas_mediana.csv")
 
 fig, ax = plt.subplots(figsize=(9, 4.5))
-tabla.plot(kind="bar", stacked=True, ax=ax, colormap="viridis", rot=0)
-ax.set_ylabel("potencia relativa (media por set)"); ax.set_xlabel("set")
-ax.legend(title="banda", fontsize=8, bbox_to_anchor=(1.01, 1), loc="upper left")
-fig.tight_layout(); fig.savefig(SALIDA / "potencia_relativa_bandas.png", dpi=150)
+tabla.plot(kind="bar", stacked=True, ax=ax, color=EG.BANDAS, rot=0, width=0.68, edgecolor="white", lw=1)
+ax.set_ylabel("potencia relativa (media por set)"); ax.set_xlabel("set"); ax.grid(axis="x", visible=False)
+ax.legend(title="banda", bbox_to_anchor=(1.01, 1), loc="upper left")
+fig.tight_layout(); fig.savefig(SALIDA / "potencia_relativa_bandas.png")
 tabla
 
 # %% [markdown]
@@ -197,10 +205,14 @@ tabla
 i = [k for k, n in enumerate(nombres) if n.upper().startswith("S056")][0]
 fs_, ts_, Sxx = signal.spectrogram(Xf[i], fs=FS, window="hann", nperseg=256, noverlap=192)
 fig, ax = plt.subplots(figsize=(10, 4))
-im = ax.pcolormesh(ts_, fs_, 10 * np.log10(Sxx + 1e-12), shading="auto", cmap="magma")
-ax.set_ylim(0, 40); ax.set_xlabel("tiempo [s]"); ax.set_ylabel("frecuencia [Hz]")
-ax.set_title("Espectrograma S056 (ictal), ventana Hann 256, solape 75 %")
-fig.colorbar(im, label="dB"); fig.tight_layout(); fig.savefig(SALIDA / "espectrograma_S056.png", dpi=150)
+S_db = 10 * np.log10(Sxx + 1e-12)
+vis = S_db[fs_ <= 40]
+im = ax.pcolormesh(ts_, fs_, S_db, shading="gouraud", cmap=EG.CMAP_ESPECTRO, rasterized=True,
+                   vmin=np.percentile(vis, 2), vmax=vis.max())
+ax.set_ylim(0, 40); ax.set_xlabel("tiempo [s]"); ax.set_ylabel("frecuencia [Hz]"); ax.grid(False)
+ax.set_title("Espectrograma S056 (ictal) · ventana Hann 256, solape 75 %")
+cb = fig.colorbar(im, label="dB", pad=0.015); cb.outline.set_visible(False)
+fig.tight_layout(); fig.savefig(SALIDA / "espectrograma_S056.png")
 
 # %% [markdown]
 # ## 1.7 Guardado para las etapas siguientes

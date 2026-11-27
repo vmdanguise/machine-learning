@@ -1,6 +1,0 @@
-Hipótesis,Enunciado,Evidencia
-H1,Caso convexo: todos los métodos se acercan al mismo óptimo global,brecha final L-BFGS = 1.3e-08; Nelder-Mead = 0.0e+00
-H2,Mayor variabilidad entre semillas en el caso no convexo,desvío medio logística = 0.0026 vs MLP = 0.0037 (Wilcoxon p = 0.281)
-H3,Sigmoide/tanh se degradan con la profundidad,GELU: 0.930→0.918; ReLU: 0.919→0.924; Sigmoide: 0.929→0.463; Tanh: 0.918→0.913
-H4,Adaptativos menos sensibles a la activación que SGD,SGD: 0.017; SGD+Nesterov: 0.010; RMSProp: 0.016; Adam: 0.010; AdamW: 0.014; L-BFGS: 0.008
-H5,Menor entropía espectral en crisis,mediana 0.628 vs 0.619; p = 1.0e+00; 8/23 sujetos

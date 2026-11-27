@@ -42,6 +42,8 @@ except ImportError:
     RAIZ = Path.cwd().parents[0] if Path.cwd().name == "notebooks" else Path.cwd()
 sys.path.insert(0, str(RAIZ / "scripts"))
 import metricas as M
+import estilo_graficos as EG
+EG.aplicar()
 
 SALIDA = RAIZ / "resultados" / "etapa3"
 SALIDA.mkdir(parents=True, exist_ok=True)
@@ -143,13 +145,12 @@ filas = []
 for ax, (nombre, s) in zip(ejes, oof.items()):
     pred = s.argmax(axis=1)
     cm = confusion_matrix(y3, pred)
-    ConfusionMatrixDisplay(cm, display_labels=CLASES).plot(ax=ax, cmap="Blues", colorbar=False)
-    ax.set_title(f"{nombre} (acc {accuracy_score(y3, pred):.3f})")
+    EG.matriz_confusion(ax, cm, CLASES, f"{nombre} · accuracy {accuracy_score(y3, pred):.3f}")
     for k, c in enumerate(CLASES):
         mv = M.metricas_ventana(y3 == k, pred == k)
         filas.append({"modelo": nombre, "clase": c, "sensibilidad": mv["sensibilidad"],
                       "especificidad": mv["especificidad"], "AUC_ovr": roc_auc_score(y3 == k, s[:, k])})
-fig.tight_layout(); fig.savefig(SALIDA / "bonn_matrices_confusion.png", dpi=150)
+fig.tight_layout(); fig.savefig(SALIDA / "bonn_matrices_confusion.png")
 tabla_bonn_clases = pd.DataFrame(filas).round(4)
 tabla_bonn_clases.to_csv(SALIDA / "bonn_metricas_por_clase.csv", index=False)
 tabla_bonn_clases
@@ -175,11 +176,12 @@ fig, ejes = plt.subplots(1, 3, figsize=(15, 4.6))
 for ax, (nombre, s) in zip(ejes, oof.items()):
     for k, c in enumerate(CLASES):
         fpr, tpr, _ = roc_curve(y3 == k, s[:, k])
-        ax.plot(fpr, tpr, label=f"{c} (AUC {roc_auc_score(y3 == k, s[:, k]):.3f})")
-    ax.plot([0, 1], [0, 1], "k--", lw=0.7)
+        ax.plot(fpr, tpr, color=EG.CLASES_BONN[k], label=f"{c} (AUC {roc_auc_score(y3 == k, s[:, k]):.3f})")
+    ax.plot([0, 1], [0, 1], ls="--", c=EG.GRIS, lw=1)
+    ax.set_xlim(-0.01, 1); ax.set_ylim(0, 1.01); ax.set_aspect("equal")
     ax.set_xlabel("1 - especificidad"); ax.set_ylabel("sensibilidad"); ax.set_title(nombre)
-    ax.legend(fontsize=8, loc="lower right"); ax.grid(alpha=0.3)
-fig.tight_layout(); fig.savefig(SALIDA / "bonn_roc.png", dpi=150)
+    ax.legend(loc="lower right")
+fig.tight_layout(); fig.savefig(SALIDA / "bonn_roc.png")
 
 # %% [markdown]
 # ### A.6 Las probabilidades sobre el simplex
@@ -200,25 +202,26 @@ P_oof = oof["logistica"]
 fig, ax = plt.subplots(figsize=(7.5, 6.8))
 vert = np.eye(3)
 u, v = a_plano(np.vstack([vert, vert[:1]]))
-ax.plot(u, v, "k-", lw=1)
+ax.fill(u, v, color="#F4F6FA", zorder=0)
+ax.plot(u, v, "-", c=EG.TINTA, lw=1.2)
 centro = np.full((1, 3), 1 / 3)
 for i, j in [(0, 1), (1, 2), (0, 2)]:
     medio = (vert[i] + vert[j]) / 2
     uu, vv = a_plano(np.vstack([centro, medio]))
-    ax.plot(uu, vv, "k--", lw=0.8)
-colores = ["steelblue", "darkorange", "crimson"]
+    ax.plot(uu, vv, "--", c=EG.GRIS, lw=1)
+colores = EG.CLASES_BONN
 for k, c in enumerate(CLASES):
     u, v = a_plano(P_oof[y3 == k])
-    ax.scatter(u, v, s=14, alpha=0.6, c=colores[k], label=f"verdadero: {c}")
+    ax.scatter(u, v, s=18, alpha=0.6, c=colores[k], edgecolors="white", linewidths=0.3, label=f"verdadero: {c}")
 mal = P_oof.argmax(1) != y3
 u, v = a_plano(P_oof[mal])
-ax.scatter(u, v, s=60, facecolors="none", edgecolors="k", lw=0.8, label="mal clasificado")
-for k, (du, dv) in enumerate([(-0.06, -0.04), (0.02, -0.04), (-0.03, 0.03)]):
+ax.scatter(u, v, s=70, facecolors="none", edgecolors=EG.TINTA, lw=1, label="mal clasificado")
+for k, (du, dv) in enumerate([(-0.07, -0.05), (0.02, -0.05), (-0.04, 0.035)]):
     u, v = a_plano(vert[k])
-    ax.text(u[0] + du, v[0] + dv, CLASES[k], fontsize=11)
-ax.set_aspect("equal"); ax.axis("off"); ax.legend(loc="upper right", fontsize=8)
+    ax.text(u[0] + du, v[0] + dv, CLASES[k], fontsize=12, fontweight="semibold", color=colores[k])
+ax.set_aspect("equal"); ax.axis("off"); ax.legend(loc="upper right")
 ax.set_title("Bonn: probabilidades de la regresión logística (fuera de la partición) en el simplex", pad=28)
-fig.tight_layout(); fig.savefig(SALIDA / "bonn_simplex.png", dpi=150)
+fig.tight_layout(); fig.savefig(SALIDA / "bonn_simplex.png")
 
 # %% [markdown]
 # **Observaciones:** casi todos los segmentos quedan pegados a su vértice (predicción con alta certeza).
@@ -238,13 +241,16 @@ logit = make_pipeline(StandardScaler(), LogisticRegression(C=1.0, max_iter=5000)
 W = logit[-1].coef_
 fig, ax = plt.subplots(figsize=(10, 4))
 for k, c in enumerate(CLASES):
-    ax.plot(CENTROS, W[k], "o-", color=colores[k], label=c)
-ax.axhline(0, c="k", lw=0.6)
-for lim in [4, 8, 13, 30]:
-    ax.axvline(lim, c="gray", ls=":", lw=0.7)
+    ax.plot(CENTROS, W[k], "o-", color=colores[k], label=c, markeredgecolor="white", markeredgewidth=0.8)
+ax.axhline(0, c=EG.TINTA, lw=0.8)
+for lim, (lo, nombre_b) in zip([4, 8, 13, 30, 40], [(0.5, "δ"), (4, "θ"), (8, "α"), (13, "β"), (30, "γ")]):
+    ax.axvline(lim, c=EG.GRIS, ls=":", lw=1)
+    ax.text((lo + lim) / 2, 1.0, nombre_b, transform=ax.get_xaxis_transform(), ha="center", va="bottom",
+            fontsize=11, color=EG.GRIS)
+ax.set_xlim(0, 40); ax.grid(axis="x", visible=False)
 ax.set_xlabel("centro de la banda [Hz]"); ax.set_ylabel("coeficiente (atributo estandarizado)")
-ax.set_title("Coeficientes de la regresión logística multinomial (Bonn)"); ax.legend(); ax.grid(alpha=0.3)
-fig.tight_layout(); fig.savefig(SALIDA / "bonn_coeficientes.png", dpi=150)
+ax.set_title("Coeficientes de la regresión logística multinomial (Bonn)", pad=22); ax.legend(ncol=3, loc="lower right")
+fig.tight_layout(); fig.savefig(SALIDA / "bonn_coeficientes.png")
 pd.DataFrame(W, index=CLASES, columns=[f"{lo:g}-{hi:g}Hz" for lo, hi in zip(BORDES[:-1], BORDES[1:])]).round(2).to_csv(
     SALIDA / "bonn_coeficientes.csv")
 
@@ -362,15 +368,17 @@ print("    por semilla:", np.round(np.sort(perd_b), 5))
 
 fig, ejes = plt.subplots(1, 2, figsize=(13, 4.3))
 it = np.arange(0, ITER, 50)
-for h in curvas:
-    ejes[0].semilogy(it, np.maximum(h, 1e-16), lw=0.8, alpha=0.7)
+for h, col in zip(curvas, plt.cm.Blues(np.linspace(0.45, 0.95, len(curvas)))):
+    ejes[0].semilogy(it, np.maximum(h, 1e-16), lw=1.1, alpha=0.8, color=col)
 ejes[0].set_xlabel("iteración"); ejes[0].set_ylabel(r"$J(\theta_t) - J(\theta^*)$")
-ejes[0].set_title("Logística (convexa): 20 inicios, mismo mínimo"); ejes[0].grid(alpha=0.3)
-ejes[1].scatter(np.arange(20), np.sort(perd_b), c="crimson")
-ejes[1].set_yscale("log")
+ejes[0].set_title("Logística (convexa): 20 inicios, mismo mínimo")
+orden_b = np.sort(perd_b)
+ejes[1].vlines(np.arange(20), orden_b.min() * 0.9, orden_b, color=EG.ROJO, alpha=0.35, lw=1.5)
+ejes[1].scatter(np.arange(20), orden_b, c=EG.ROJO, s=42, edgecolors="white", linewidths=0.8, zorder=3)
+ejes[1].set_yscale("log"); ejes[1].grid(axis="x", visible=False)
 ejes[1].set_xlabel("semilla (ordenadas por pérdida)"); ejes[1].set_ylabel("pérdida final")
-ejes[1].set_title("MLP 2 neuronas, 3 clases (no convexa): pérdida final por semilla"); ejes[1].grid(alpha=0.3)
-fig.tight_layout(); fig.savefig(SALIDA / "optimalidad_convexo_vs_no_convexo.png", dpi=150)
+ejes[1].set_title("MLP 2 neuronas, 3 clases (no convexa): pérdida final por semilla")
+fig.tight_layout(); fig.savefig(SALIDA / "optimalidad_convexo_vs_no_convexo.png")
 
 # %% [markdown]
 # **Observaciones:**
@@ -466,12 +474,14 @@ kkt
 
 # %%
 fig, ax = plt.subplots(figsize=(9, 4.5))
-for msk, c, et in [(cero, "gray", r"$\alpha_i = 0$"), (libre, "royalblue", r"$0<\alpha_i<C$"), (acot, "crimson", r"$\alpha_i = C$")]:
-    ax.scatter(m[msk], alfa[msk], s=18, c=c, alpha=0.7, label=f"{et} ({msk.sum()})")
-ax.axvline(1, c="k", ls="--", lw=0.8); ax.axhline(CSVM, c="k", ls=":", lw=0.8)
+ax.axvspan(-2, 1, color=EG.GRIS_CLARO, alpha=0.35, lw=0)
+for msk, c, et in [(cero, EG.GRIS, r"$\alpha_i = 0$"), (libre, EG.AZUL, r"$0<\alpha_i<C$"), (acot, EG.ROJO, r"$\alpha_i = C$")]:
+    ax.scatter(m[msk], alfa[msk], s=34, c=c, alpha=0.8, edgecolors="white", linewidths=0.6, label=f"{et} ({msk.sum()})")
+ax.axvline(1, c=EG.TINTA, ls="--", lw=1); ax.axhline(CSVM, c=EG.TINTA, ls=":", lw=1)
+ax.text(1.08, 0.5, "margen  $m_i = 1$", transform=ax.get_xaxis_transform(), fontsize=9.5, color=EG.TINTA, rotation=90, va="center")
 ax.set_xlabel(r"$m_i = y_i\,f(\mathbf{x}_i)$"); ax.set_ylabel(r"$\alpha_i$"); ax.set_xlim(-2, 6)
-ax.set_title("Holgura complementaria del SVM lineal (Bonn, E contra D)"); ax.legend(); ax.grid(alpha=0.3)
-fig.tight_layout(); fig.savefig(SALIDA / "svm_kkt.png", dpi=150)
+ax.set_title("Holgura complementaria del SVM lineal (Bonn, E contra D)"); ax.legend(loc="center right")
+fig.tight_layout(); fig.savefig(SALIDA / "svm_kkt.png")
 
 # %% [markdown]
 # ## Parte D — CHB-MIT: detección en un paciente que el modelo nunca vio
@@ -627,19 +637,19 @@ resumen_lopo
 # %%
 fig, ejes = plt.subplots(1, 2, figsize=(13, 5.2), sharey=True)
 for ax, var in zip(ejes, VARIANTES):
-    for p in PACIENTES:
+    for p, col in zip(PACIENTES, EG.CICLO):
         te = pac == p
         limpio = ~borde[te]
         s = scores[(var, "logistica", p)][limpio]
         fpr, tpr, _ = roc_curve(ictal[te][limpio], s)
-        ax.plot(fpr, tpr, lw=1.2, label=f"{p} (AUC {roc_auc_score(ictal[te][limpio], s):.3f})")
+        ax.plot(fpr, tpr, lw=1.7, color=col, label=f"{p} (AUC {roc_auc_score(ictal[te][limpio], s):.3f})")
     azar = np.concatenate([[0], np.logspace(-5, 0, 200)])
-    ax.plot(azar, azar, "k--", lw=0.7)
-    ax.set_xscale("symlog", linthresh=1e-3); ax.set_xlim(0, 1)
+    ax.plot(azar, azar, ls="--", c=EG.GRIS, lw=1)
+    ax.set_xscale("symlog", linthresh=1e-3); ax.set_xlim(0, 1); ax.set_ylim(0, 1.01)
     ax.set_xlabel("1 - especificidad (escala log por debajo de 0,001)"); ax.set_title(f"Logística, variante {var}")
-    ax.legend(fontsize=8, loc="lower right"); ax.grid(alpha=0.3)
+    ax.legend(loc="lower right")
 ejes[0].set_ylabel("sensibilidad")
-fig.tight_layout(); fig.savefig(SALIDA / "chbmit_lopo_roc.png", dpi=150)
+fig.tight_layout(); fig.savefig(SALIDA / "chbmit_lopo_roc.png")
 
 # %% [markdown]
 # El eje horizontal está en escala logarítmica cerca de cero porque la zona que importa es la de
@@ -665,9 +675,8 @@ for ax, var in zip(ejes, VARIANTES):
     cm = np.zeros((2, 2), int)
     for _, r in lopo.query("variante == @var and modelo == 'logistica' and regla == 'neyman_pearson'").iterrows():
         cm += np.array([[r.TN, r.FP], [r.FN, r.TP]])
-    ConfusionMatrixDisplay(cm, display_labels=["sin crisis", "crisis"]).plot(ax=ax, cmap="Blues", colorbar=False, values_format="d")
-    ax.set_title(f"Logística, {var}, umbral NP")
-fig.tight_layout(); fig.savefig(SALIDA / "chbmit_lopo_confusion.png", dpi=150)
+    EG.matriz_confusion(ax, cm, ["sin crisis", "crisis"], f"Logística, {var}, umbral NP")
+fig.tight_layout(); fig.savefig(SALIDA / "chbmit_lopo_confusion.png")
 
 # %% [markdown]
 # ## Parte E — Partición fija (para comparar con la CNN)

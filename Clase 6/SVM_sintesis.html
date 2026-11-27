@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clase 6 — Support Vector Machines: síntesis</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+  :root {
+    --bg: #f7f8fb; --card: #ffffff; --text: #1f2430; --muted: #5b6475;
+    --accent: #3b5bdb; --accent2: #e8590c; --ok: #2b8a3e; --border: #e3e6ee;
+    --pos: #e03131; --neg: #1971c2;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; }
+  header { background: linear-gradient(135deg, #3b5bdb, #7048e8); color: #fff; padding: 48px 24px 36px; text-align: center; }
+  header h1 { margin: 0 0 8px; font-size: 2.2rem; }
+  header p { margin: 0; opacity: .9; }
+  nav { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; padding: 8px; }
+  nav a { color: var(--accent); text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: .92rem; }
+  nav a:hover { background: #edf2ff; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  h2 { margin-top: 0; color: var(--accent); border-bottom: 2px solid #edf2ff; padding-bottom: 8px; }
+  h3 { color: #343a40; margin-top: 28px; }
+  .box { border-left: 4px solid var(--accent); background: #f3f6ff; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .box.warn { border-color: var(--accent2); background: #fff4e6; }
+  .box.ok { border-color: var(--ok); background: #ebfbee; }
+  .box strong:first-child { display: block; margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: .95rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f1f3f5; }
+  figure { text-align: center; margin: 20px 0; }
+  figcaption { color: var(--muted); font-size: .9rem; margin-top: 6px; }
+  pre { background: #1e1e2e; color: #e0e0f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: .88rem; line-height: 1.5; }
+  code { font-family: Consolas, "Courier New", monospace; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  .demo { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .demo canvas { border: 1px solid var(--border); border-radius: 8px; max-width: 100%; }
+  .controls { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 10px; }
+  .controls label { font-size: .9rem; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+  .controls select, .controls input[type=range] { width: 100%; }
+  .controls button { background: var(--accent); color: #fff; border: 0; padding: 10px; border-radius: 6px; cursor: pointer; font-size: .95rem; }
+  .controls button.sec { background: #868e96; }
+  .controls button:hover { filter: brightness(1.1); }
+  #stats { font-family: Consolas, monospace; font-size: .85rem; background: #f8f9fa; padding: 10px; border-radius: 6px; white-space: pre-line; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; padding: 24px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Support Vector Machines</h1>
+  <p>Clase 6 · Clasificador de margen óptimo · Kernels · Dimensiones infinitas · Algoritmo SMO</p>
+</header>
+
+<nav>
+  <a href="#intro">1. Idea</a>
+  <a href="#margenes">2. Márgenes</a>
+  <a href="#optimo">3. Margen óptimo</a>
+  <a href="#dual">4. Dual y KKT</a>
+  <a href="#kernels">5. Kernels</a>
+  <a href="#infinito">6. Dim. infinitas</a>
+  <a href="#soft">7. Margen blando</a>
+  <a href="#smo">8. SMO</a>
+  <a href="#demo">9. Demo</a>
+  <a href="#resumen">10. Resumen</a>
+</nav>
+
+<main>
+
+<!-- ============================================================ -->
+<section id="intro">
+  <h2>1. La idea central</h2>
+  <p>
+    Una <strong>Support Vector Machine (SVM)</strong> es un clasificador binario que busca, entre todos los hiperplanos
+    que separan dos clases, <strong>el que deja la mayor distancia (margen) a los puntos más cercanos</strong> de cada clase.
+    La intuición: si un punto está lejos de la frontera, estamos "seguros" de su clasificación; maximizar el margen
+    produce un clasificador más robusto y que generaliza mejor.
+  </p>
+  <p>Usamos etiquetas $y \in \{-1, +1\}$ y un clasificador lineal:</p>
+  $$ h_{w,b}(x) = g(w^\top x + b), \qquad g(z) = \begin{cases} +1 & z \ge 0 \\ -1 & z < 0 \end{cases} $$
+  <p>
+    A diferencia de la regresión logística, la SVM <em>no</em> estima probabilidades: predice directamente la clase.
+    Los tres ingredientes que la hacen poderosa son:
+  </p>
+  <ol>
+    <li><strong>Margen máximo</strong> → un problema de optimización convexo con solución única.</li>
+    <li><strong>Formulación dual</strong> → los datos sólo aparecen a través de productos internos $\langle x_i, x_j\rangle$.</li>
+    <li><strong>Truco del kernel</strong> → reemplazar ese producto interno por $K(x_i,x_j)$ permite trabajar en espacios de muy alta (incluso infinita) dimensión sin pagar su costo.</li>
+  </ol>
+</section>
+
+<!-- ============================================================ -->
+<section id="margenes">
+  <h2>2. Margen funcional y margen geométrico</h2>
+
+  <h3>Margen funcional</h3>
+  <p>Para un ejemplo $(x^{(i)}, y^{(i)})$:</p>
+  $$ \hat\gamma^{(i)} = y^{(i)}\,\left(w^\top x^{(i)} + b\right) $$
+  <p>
+    Si $\hat\gamma^{(i)} > 0$ la clasificación es correcta, y cuanto más grande, más "confiada".
+    El margen funcional del conjunto es el peor caso: $\hat\gamma = \min_i \hat\gamma^{(i)}$.
+  </p>
+  <div class="box warn">
+    <strong>Problema:</strong>
+    Si escalamos $(w,b) \to (2w, 2b)$ la frontera no cambia, pero el margen funcional se duplica.
+    Se puede hacer arbitrariamente grande sin mejorar nada. Necesitamos normalizar.
+  </div>
+
+  <h3>Margen geométrico</h3>
+  <p>Es la distancia euclídea real del punto al hiperplano $w^\top x + b = 0$:</p>
+  $$ \gamma^{(i)} = y^{(i)}\left( \left(\frac{w}{\|w\|}\right)^{\!\top} x^{(i)} + \frac{b}{\|w\|} \right) = \frac{\hat\gamma^{(i)}}{\|w\|} $$
+  <p>
+    Es <strong>invariante al escalado</strong> de $(w,b)$. El margen geométrico del conjunto es $\gamma = \min_i \gamma^{(i)}$.
+    Como el escalado es libre, podemos fijarlo como queramos — por ejemplo, imponer $\hat\gamma = 1$.
+  </p>
+
+  <figure>
+    <svg viewBox="0 0 460 360" width="460" style="max-width:100%; background:#fcfcfe; border:1px solid #e3e6ee; border-radius:8px">
+      <defs>
+        <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#2b8a3e"/>
+        </marker>
+        <marker id="arr2" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#e8590c"/>
+        </marker>
+        <clipPath id="clip"><rect x="0" y="0" width="460" height="360"/></clipPath>
+      </defs>
+      <g clip-path="url(#clip)">
+        <line x1="340" y1="20" x2="20" y2="340" stroke="#212529" stroke-width="2.5"/>
+        <line x1="283.4" y1="20" x2="-36.6" y2="340" stroke="#1971c2" stroke-width="1.5" stroke-dasharray="6,5"/>
+        <line x1="396.6" y1="20" x2="76.6" y2="340" stroke="#e03131" stroke-width="1.5" stroke-dasharray="6,5"/>
+      </g>
+      <!-- clase -1 -->
+      <g fill="#1971c2">
+        <circle cx="60" cy="120" r="6"/><circle cx="100" cy="170" r="6"/><circle cx="150" cy="80" r="6"/>
+        <circle cx="70" cy="220" r="6"/><circle cx="200" cy="50" r="6"/><circle cx="40" cy="60" r="6"/>
+        <circle cx="150" cy="153.4" r="6"/><circle cx="220" cy="83.4" r="6"/>
+      </g>
+      <!-- clase +1 -->
+      <g fill="#e03131">
+        <circle cx="300" cy="250" r="6"/><circle cx="360" cy="200" r="6"/><circle cx="260" cy="300" r="6"/>
+        <circle cx="390" cy="300" r="6"/><circle cx="330" cy="320" r="6"/><circle cx="410" cy="120" r="6"/>
+        <circle cx="230" cy="186.6" r="6"/><circle cx="280" cy="136.6" r="6"/>
+      </g>
+      <!-- vectores soporte -->
+      <g fill="none" stroke="#212529" stroke-width="1.8">
+        <circle cx="150" cy="153.4" r="11"/><circle cx="220" cy="83.4" r="11"/>
+        <circle cx="230" cy="186.6" r="11"/><circle cx="280" cy="136.6" r="11"/>
+      </g>
+      <line x1="250" y1="110" x2="292" y2="152" stroke="#2b8a3e" stroke-width="2.5" marker-end="url(#arr)"/>
+      <text x="296" y="150" fill="#2b8a3e" font-size="16" font-style="italic" font-weight="bold">w</text>
+      <line x1="182" y1="182" x2="206" y2="206" stroke="#e8590c" stroke-width="2" marker-start="url(#arr2)" marker-end="url(#arr2)"/>
+      <text x="160" y="225" fill="#e8590c" font-size="14">γ = 1/‖w‖</text>
+      <text x="12" y="350" font-size="12" fill="#212529">wᵀx+b = 0</text>
+      <text x="300" y="16" font-size="12" fill="#1971c2">wᵀx+b = −1</text>
+      <text x="370" y="345" font-size="12" fill="#e03131">wᵀx+b = +1</text>
+      <text x="10" y="20" font-size="12" fill="#495057">○ = vectores soporte</text>
+    </svg>
+    <figcaption>Hiperplano separador (línea continua), bandas del margen (punteadas) y vectores soporte (círculos negros).</figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ -->
+<section id="optimo">
+  <h2>3. El clasificador de margen óptimo</h2>
+  <p>Suponiendo datos <strong>linealmente separables</strong>, queremos maximizar el margen geométrico:</p>
+  $$ \max_{\gamma, w, b} \; \gamma \quad \text{s.a.} \quad y^{(i)}(w^\top x^{(i)} + b) \ge \gamma,\;\; \|w\| = 1 $$
+  <p>
+    La restricción $\|w\|=1$ no es convexa. Pasamos por el margen funcional: maximizar $\hat\gamma/\|w\|$, y usando la libertad
+    de escala fijamos $\hat\gamma = 1$. Maximizar $1/\|w\|$ equivale a minimizar $\|w\|^2$:
+  </p>
+  <div class="box ok">
+    <strong>Problema primal del clasificador de margen óptimo</strong>
+    $$ \min_{w,b} \; \frac{1}{2}\|w\|^2 \quad \text{s.a.} \quad y^{(i)}\left(w^\top x^{(i)} + b\right) \ge 1, \quad i = 1,\dots,m $$
+  </div>
+  <p>
+    Es un <strong>problema cuadrático convexo</strong> (función objetivo cuadrática, restricciones lineales) → tiene óptimo global
+    y se puede resolver con cualquier solver de programación cuadrática (QP). El margen resultante es $\gamma = 1/\|w\|$
+    y el ancho total de la banda es $2/\|w\|$.
+  </p>
+  <p>
+    ¿Por qué no quedarnos acá? Porque resolver el <em>dual</em> nos da dos regalos: (1) el truco del kernel y
+    (2) un algoritmo muy eficiente (SMO).
+  </p>
+</section>
+
+<!-- ============================================================ -->
+<section id="dual">
+  <h2>4. Dualidad de Lagrange y condiciones KKT</h2>
+
+  <h3>Repaso: problema general</h3>
+  <p>Para $\min_w f(w)$ s.a. $g_i(w) \le 0$, $h_i(w)=0$, el <strong>Lagrangiano generalizado</strong> es</p>
+  $$ \mathcal{L}(w,\alpha,\beta) = f(w) + \sum_i \alpha_i g_i(w) + \sum_i \beta_i h_i(w), \qquad \alpha_i \ge 0 $$
+  <ul>
+    <li><strong>Primal:</strong> $p^* = \min_w \max_{\alpha\ge0,\beta} \mathcal{L}$</li>
+    <li><strong>Dual:</strong> $d^* = \max_{\alpha\ge0,\beta} \min_w \mathcal{L}$</li>
+    <li>Siempre $d^* \le p^*$ (dualidad débil). Si $f$ y $g_i$ son convexas, $h_i$ afines y las restricciones estrictamente factibles (condición de Slater), entonces $d^* = p^*$ (<strong>dualidad fuerte</strong>).</li>
+  </ul>
+
+  <h3>Condiciones de Karush–Kuhn–Tucker (KKT)</h3>
+  <p>Bajo esas hipótesis, $(w^*,\alpha^*,\beta^*)$ es óptimo si y sólo si:</p>
+  $$
+  \begin{aligned}
+  &\nabla_w \mathcal{L}(w^*,\alpha^*,\beta^*) = 0 && \text{(estacionariedad)}\\
+  &g_i(w^*) \le 0,\;\; h_i(w^*) = 0 && \text{(factibilidad primal)}\\
+  &\alpha_i^* \ge 0 && \text{(factibilidad dual)}\\
+  &\alpha_i^*\, g_i(w^*) = 0 && \text{(holgura complementaria)}
+  \end{aligned}
+  $$
+  <div class="box">
+    <strong>Holgura complementaria → vectores soporte</strong>
+    Con $g_i(w) = 1 - y^{(i)}(w^\top x^{(i)}+b)$: si $\alpha_i > 0$ entonces $g_i = 0$, es decir el punto está
+    <em>exactamente sobre el margen</em> ($\hat\gamma^{(i)}=1$). Esos puntos son los <strong>vectores soporte</strong>.
+    Todos los demás tienen $\alpha_i = 0$ y no influyen en la solución. Normalmente son pocos.
+  </div>
+
+  <h3>Derivación del dual de la SVM</h3>
+  <p>Lagrangiano del problema de margen óptimo:</p>
+  $$ \mathcal{L}(w,b,\alpha) = \frac{1}{2}\|w\|^2 - \sum_{i=1}^m \alpha_i \left[ y^{(i)}(w^\top x^{(i)} + b) - 1 \right] $$
+  <p>Minimizamos respecto de $w$ y $b$:</p>
+  $$ \nabla_w \mathcal{L} = w - \sum_i \alpha_i y^{(i)} x^{(i)} = 0 \;\Rightarrow\; \boxed{w = \sum_{i=1}^m \alpha_i y^{(i)} x^{(i)}} $$
+  $$ \frac{\partial \mathcal{L}}{\partial b} = -\sum_i \alpha_i y^{(i)} = 0 $$
+  <p>Sustituyendo de nuevo en $\mathcal{L}$ obtenemos el <strong>problema dual</strong>:</p>
+  <div class="box ok">
+    <strong>Dual del clasificador de margen óptimo</strong>
+    $$ \max_\alpha \; W(\alpha) = \sum_{i=1}^m \alpha_i - \frac{1}{2}\sum_{i,j=1}^m y^{(i)} y^{(j)} \alpha_i \alpha_j \,\big\langle x^{(i)}, x^{(j)} \big\rangle $$
+    $$ \text{s.a.} \quad \alpha_i \ge 0, \qquad \sum_{i=1}^m \alpha_i y^{(i)} = 0 $$
+  </div>
+  <p>Una vez hallados los $\alpha^*$, el término independiente sale de los vectores soporte:</p>
+  $$ b^* = -\frac{\max_{i:\,y^{(i)}=-1} w^{*\top} x^{(i)} + \min_{i:\,y^{(i)}=+1} w^{*\top} x^{(i)}}{2} $$
+
+  <h3>Predicción</h3>
+  $$ w^\top x + b = \sum_{i=1}^m \alpha_i y^{(i)} \big\langle x^{(i)}, x \big\rangle + b $$
+  <div class="box">
+    <strong>Observación clave</strong>
+    Tanto el entrenamiento como la predicción dependen de los datos <em>únicamente a través de productos internos</em>.
+    Y en la predicción sólo hace falta sumar sobre los vectores soporte ($\alpha_i \neq 0$). Esto abre la puerta a los kernels.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="kernels">
+  <h2>5. Kernels</h2>
+  <p>
+    Si los datos no son linealmente separables en el espacio original, podemos mapearlos a un espacio de
+    <strong>características</strong> $\phi(x)$ de mayor dimensión donde sí lo sean. Por ejemplo, con $x\in\mathbb{R}$:
+    $\phi(x) = (x, x^2, x^3)$. Basta con reemplazar en el dual cada $\langle x, z\rangle$ por $\langle \phi(x), \phi(z)\rangle$.
+  </p>
+  <p>Definimos el <strong>kernel</strong>:</p>
+  $$ K(x, z) = \phi(x)^\top \phi(z) $$
+  <div class="box ok">
+    <strong>El truco del kernel</strong>
+    Muchas veces $K(x,z)$ se calcula de forma barata <em>sin construir nunca $\phi(x)$</em>, aunque $\phi(x)$ tenga
+    dimensión enorme. El algoritmo nunca necesita $\phi$: sólo evalúa $K$.
+  </div>
+
+  <h3>Ejemplo: kernel cuadrático</h3>
+  <p>Con $x, z \in \mathbb{R}^n$ y $K(x,z) = (x^\top z)^2$:</p>
+  $$ (x^\top z)^2 = \Big(\sum_i x_i z_i\Big)\Big(\sum_j x_j z_j\Big) = \sum_{i,j} (x_i x_j)(z_i z_j) = \phi(x)^\top\phi(z) $$
+  <p>
+    donde $\phi(x)$ contiene todos los productos $x_i x_j$ ($n^2$ componentes). Para $n=3$:
+    $\phi(x) = (x_1x_1, x_1x_2, x_1x_3, x_2x_1, \dots, x_3x_3)$.
+    Calcular $\phi$ cuesta $O(n^2)$, pero $K$ cuesta sólo <strong>$O(n)$</strong>.
+  </p>
+  <p>
+    En general, $K(x,z) = (x^\top z + c)^d$ corresponde a un espacio con todos los monomios de grado hasta $d$:
+    $\binom{n+d}{d}$ dimensiones, pero se sigue calculando en $O(n)$.
+  </p>
+
+  <h3>Kernels más usados</h3>
+  <table>
+    <tr><th>Kernel</th><th>Fórmula</th><th>Espacio de características</th></tr>
+    <tr><td>Lineal</td><td>$K(x,z) = x^\top z$</td><td>El original ($n$ dims)</td></tr>
+    <tr><td>Polinomial</td><td>$K(x,z) = (x^\top z + c)^d$</td><td>Monomios hasta grado $d$: $\binom{n+d}{d}$ dims</td></tr>
+    <tr><td>Gaussiano / RBF</td><td>$K(x,z) = \exp\!\left(-\dfrac{\|x-z\|^2}{2\sigma^2}\right)$</td><td><strong>Infinito-dimensional</strong></td></tr>
+    <tr><td>Sigmoide</td><td>$K(x,z) = \tanh(\kappa\, x^\top z + \theta)$</td><td>No siempre es un kernel válido</td></tr>
+  </table>
+
+  <h3>Intuición: el kernel como similitud</h3>
+  <p>
+    Si $\phi(x)$ y $\phi(z)$ están cerca, $\phi(x)^\top\phi(z)$ es grande; si son casi ortogonales, es chico.
+    El kernel gaussiano vale $\approx 1$ cuando $x\approx z$ y $\approx 0$ cuando están lejos: es literalmente una
+    medida de similitud. $\sigma$ (o $\gamma = 1/2\sigma^2$) controla el "radio de influencia" de cada vector soporte.
+  </p>
+
+  <h3>¿Cuándo una función es un kernel válido? — Teorema de Mercer</h3>
+  <p>
+    Dado $\{x^{(1)},\dots,x^{(m)}\}$, la <strong>matriz de Gram (matriz kernel)</strong> es $K_{ij} = K(x^{(i)}, x^{(j)})$.
+    Si $K$ es un kernel válido, esa matriz es:
+  </p>
+  <ul>
+    <li><strong>Simétrica</strong>: $K_{ij} = \phi(x^{(i)})^\top\phi(x^{(j)}) = K_{ji}$.</li>
+    <li><strong>Semidefinida positiva</strong>: $z^\top K z = \sum_{i,j} z_i K_{ij} z_j = \big\|\sum_i z_i \phi(x^{(i)})\big\|^2 \ge 0$.</li>
+  </ul>
+  <div class="box">
+    <strong>Teorema de Mercer</strong>
+    $K:\mathbb{R}^n\times\mathbb{R}^n\to\mathbb{R}$ es un kernel válido (existe $\phi$ tal que $K(x,z)=\phi(x)^\top\phi(z)$)
+    <em>si y sólo si</em> para todo conjunto finito de puntos, la matriz de Gram correspondiente es simétrica y semidefinida positiva.
+  </div>
+  <p>
+    Propiedades útiles para construir kernels: si $K_1,K_2$ son kernels, también lo son $K_1+K_2$, $aK_1$ ($a>0$),
+    $K_1 K_2$, $f(x)K_1(x,z)f(z)$ y $\exp(K_1)$.
+  </p>
+  <div class="box warn">
+    <strong>Los kernels no son exclusivos de las SVM</strong>
+    Cualquier algoritmo que se pueda escribir en términos de productos internos se puede "kernelizar":
+    perceptrón, regresión logística, PCA (kernel PCA), regresión ridge, k-means, etc.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="infinito">
+  <h2>6. Dimensiones infinitas: ¿cómo es posible?</h2>
+  <p>
+    El kernel gaussiano corresponde a un $\phi$ que mapea a un espacio de <strong>dimensión infinita</strong>.
+    Veámoslo en una dimensión, con $\sigma^2 = 1/2$ para simplificar ($K(x,z) = e^{-(x-z)^2}$):
+  </p>
+  $$ e^{-(x-z)^2} = e^{-x^2}\, e^{-z^2}\, e^{2xz} $$
+  <p>Desarrollando en serie de Taylor el último factor:</p>
+  $$ e^{2xz} = \sum_{k=0}^{\infty} \frac{(2xz)^k}{k!} = \sum_{k=0}^{\infty} \left(\sqrt{\tfrac{2^k}{k!}}\, x^k\right)\left(\sqrt{\tfrac{2^k}{k!}}\, z^k\right) $$
+  <p>Por lo tanto $K(x,z) = \phi(x)^\top\phi(z)$ con</p>
+  $$ \phi(x) = e^{-x^2}\left(1,\; \sqrt{\tfrac{2}{1!}}\,x,\; \sqrt{\tfrac{2^2}{2!}}\,x^2,\; \sqrt{\tfrac{2^3}{3!}}\,x^3,\; \dots \right) $$
+  <p>
+    ¡Un vector con <strong>infinitas componentes</strong>: todos los monomios de todos los grados! En $\mathbb{R}^n$ pasa lo
+    mismo: el RBF es como una suma ponderada de kernels polinomiales de todos los grados $(x^\top z)^k$.
+  </p>
+
+  <div class="grid2">
+    <div class="box">
+      <strong>¿Por qué no es un problema computacional?</strong>
+      Nunca escribimos $w$ ni $\phi(x)$. Sólo guardamos los $\alpha_i$ (uno por ejemplo, $m$ números) y evaluamos
+      $f(x) = \sum_i \alpha_i y^{(i)} K(x^{(i)},x) + b$. Aunque $w = \sum_i \alpha_i y^{(i)}\phi(x^{(i)})$ viva en un espacio infinito,
+      queda representado por <em>combinación finita</em> de los datos (teorema del representante).
+    </div>
+    <div class="box">
+      <strong>¿Por qué no sobreajusta automáticamente?</strong>
+      Con un espacio infinito, cualquier conjunto (con puntos distintos) es separable. Lo que controla la complejidad
+      no es la dimensión sino el <strong>margen</strong>: la cota de generalización depende de $1/\gamma^2$, no de la
+      dimensión. Igual, hay que regularizar con $C$ y elegir bien $\sigma$.
+    </div>
+  </div>
+
+  <p>Efecto de $\sigma$ en el RBF:</p>
+  <ul>
+    <li><strong>$\sigma$ grande</strong> ($\gamma$ chico): cada punto influye lejos → fronteras suaves, casi lineales (riesgo de <em>subajuste</em>).</li>
+    <li><strong>$\sigma$ chico</strong> ($\gamma$ grande): influencia muy local → fronteras muy irregulares que rodean cada punto (riesgo de <em>sobreajuste</em>).</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section id="soft">
+  <h2>7. Margen blando: regularización y casos no separables</h2>
+  <p>
+    Aun con kernels, los datos pueden no ser separables o tener <em>outliers</em> que arruinan el margen.
+    Introducimos variables de holgura $\xi_i \ge 0$ (regularización $\ell_1$):
+  </p>
+  <div class="box ok">
+    <strong>Primal con margen blando (C-SVM)</strong>
+    $$ \min_{w,b,\xi} \; \frac{1}{2}\|w\|^2 + C\sum_{i=1}^m \xi_i \quad \text{s.a.} \quad y^{(i)}(w^\top x^{(i)}+b) \ge 1-\xi_i,\;\; \xi_i \ge 0 $$
+  </div>
+  <p>
+    Ahora se permite que un punto tenga margen funcional menor a 1 (incluso negativo = mal clasificado) pagando un costo $C\xi_i$.
+    $C$ regula el compromiso entre <strong>margen amplio</strong> y <strong>pocos errores</strong>:
+  </p>
+  <ul>
+    <li><strong>$C$ grande</strong>: penaliza mucho los errores → margen angosto, se acerca al margen duro (riesgo de sobreajuste).</li>
+    <li><strong>$C$ chico</strong>: tolera errores → margen ancho, más regularizado.</li>
+  </ul>
+
+  <h3>Dual con margen blando</h3>
+  <p>Haciendo la misma derivación, sorprendentemente el dual casi no cambia: sólo aparece una cota superior en $\alpha_i$.</p>
+  $$ \max_\alpha \; \sum_i \alpha_i - \frac{1}{2}\sum_{i,j} y^{(i)}y^{(j)}\alpha_i\alpha_j K(x^{(i)},x^{(j)}) \quad \text{s.a.}\quad \boxed{0 \le \alpha_i \le C}, \;\; \sum_i \alpha_i y^{(i)} = 0 $$
+
+  <h3>Condiciones KKT (las usa SMO para verificar convergencia)</h3>
+  <table>
+    <tr><th>Valor de $\alpha_i$</th><th>Condición</th><th>Interpretación</th></tr>
+    <tr><td>$\alpha_i = 0$</td><td>$y^{(i)} f(x^{(i)}) \ge 1$</td><td>Bien clasificado, fuera del margen. No es vector soporte.</td></tr>
+    <tr><td>$0 < \alpha_i < C$</td><td>$y^{(i)} f(x^{(i)}) = 1$</td><td>Vector soporte <strong>sobre</strong> el margen.</td></tr>
+    <tr><td>$\alpha_i = C$</td><td>$y^{(i)} f(x^{(i)}) \le 1$</td><td>Dentro del margen o mal clasificado ($\xi_i>0$).</td></tr>
+  </table>
+
+  <div class="box">
+    <strong>Equivalencia con la pérdida bisagra (hinge loss)</strong>
+    En el óptimo $\xi_i = \max(0,\, 1 - y^{(i)}f(x^{(i)}))$, así que la SVM equivale a
+    $$ \min_{w,b} \; \sum_i \max\!\big(0,\, 1 - y^{(i)}(w^\top x^{(i)}+b)\big) + \frac{1}{2C}\|w\|^2 $$
+    es decir, <em>pérdida bisagra + regularización L2</em>. Comparable a la regresión logística, que usa la pérdida logística.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="smo">
+  <h2>8. El algoritmo SMO (Sequential Minimal Optimization)</h2>
+  <p>
+    Propuesto por <strong>John Platt (1998)</strong>. Resolver el dual con un solver QP genérico requiere manipular la matriz
+    $m\times m$ de Gram — inviable con muchos datos. SMO resuelve el dual con un método de <strong>ascenso por coordenadas</strong>
+    muy eficiente.
+  </p>
+
+  <h3>Paso previo: ascenso por coordenadas</h3>
+  <p>Para maximizar $W(\alpha_1,\dots,\alpha_m)$ sin restricciones:</p>
+<pre><code>Repetir hasta converger:
+    Para i = 1..m:
+        α_i := argmax_{α̂_i} W(α_1, ..., α̂_i, ..., α_m)   # optimiza una sola variable, las demás fijas</code></pre>
+  <p>Cada paso es muy barato cuando la optimización en una variable tiene solución cerrada.</p>
+
+  <h3>¿Por qué de a dos variables?</h3>
+  <div class="box warn">
+    <strong>No se puede mover un solo $\alpha_i$</strong>
+    La restricción $\sum_i \alpha_i y^{(i)} = 0$ implica que, fijando todos menos $\alpha_1$,
+    $\alpha_1 = -y^{(1)}\sum_{i\ge2}\alpha_i y^{(i)}$ queda <em>determinado</em>. Hay que actualizar al menos <strong>dos</strong> a la vez:
+    es la mínima optimización posible — de ahí el nombre <em>"Minimal"</em>.
+  </div>
+
+  <h3>Estructura del algoritmo</h3>
+<pre><code>Repetir hasta converger:
+    1. Elegir un par (α_i, α_j) para actualizar (heurística: el que más acerque al óptimo)
+    2. Reoptimizar W(α) respecto de α_i y α_j, dejando fijos todos los demás
+Convergencia: todas las condiciones KKT se cumplen dentro de una tolerancia ε (~1e-3)</code></pre>
+
+  <h3>La actualización analítica de un par</h3>
+  <p>Fijados todos menos $\alpha_1, \alpha_2$, la restricción de igualdad queda:</p>
+  $$ \alpha_1 y^{(1)} + \alpha_2 y^{(2)} = -\sum_{i\ge3}\alpha_i y^{(i)} = \zeta \quad (\text{constante}) $$
+  <p>
+    Junto con la caja $0\le\alpha_1,\alpha_2\le C$, los valores posibles están sobre un <strong>segmento de recta</strong>
+    dentro del cuadrado $[0,C]^2$. Despejando $\alpha_1 = (\zeta - \alpha_2 y^{(2)})y^{(1)}$, $W$ se vuelve una
+    <strong>parábola en $\alpha_2$</strong>: se maximiza en forma cerrada y luego se recorta al segmento $[L, H]$.
+  </p>
+
+  <div class="grid2">
+    <div>
+      <p><strong>Cotas del segmento</strong></p>
+      <p>Si $y^{(1)} \ne y^{(2)}$:</p>
+      $$ L = \max(0, \alpha_2-\alpha_1),\;\; H = \min(C, C+\alpha_2-\alpha_1) $$
+      <p>Si $y^{(1)} = y^{(2)}$:</p>
+      $$ L = \max(0, \alpha_1+\alpha_2-C),\;\; H = \min(C, \alpha_1+\alpha_2) $$
+    </div>
+    <div>
+      <p><strong>Errores y curvatura</strong></p>
+      $$ E_k = f(x^{(k)}) - y^{(k)} $$
+      $$ \eta = 2K_{12} - K_{11} - K_{22} \;\; (\le 0) $$
+      <p>$\eta$ es la segunda derivada de $W$ sobre la recta; si $\eta \ge 0$ se salta el par (caso degenerado).</p>
+    </div>
+  </div>
+
+  <p><strong>Actualización:</strong></p>
+  $$ \alpha_2^{\text{nuevo}} = \alpha_2 - \frac{y^{(2)}(E_1 - E_2)}{\eta}, \qquad
+     \alpha_2^{\text{nuevo, recortado}} = \begin{cases} H & \text{si } \alpha_2^{\text{nuevo}} > H \\ \alpha_2^{\text{nuevo}} & \text{si } L \le \alpha_2^{\text{nuevo}} \le H \\ L & \text{si } \alpha_2^{\text{nuevo}} < L \end{cases} $$
+  $$ \alpha_1^{\text{nuevo}} = \alpha_1 + y^{(1)}y^{(2)}\left(\alpha_2 - \alpha_2^{\text{nuevo, recortado}}\right) $$
+  <p><strong>Actualización de $b$</strong> (para que se cumplan las KKT en los puntos actualizados):</p>
+  $$ b_1 = b - E_1 - y^{(1)}(\alpha_1^{\text{n}}-\alpha_1)K_{11} - y^{(2)}(\alpha_2^{\text{n}}-\alpha_2)K_{12} $$
+  $$ b_2 = b - E_2 - y^{(1)}(\alpha_1^{\text{n}}-\alpha_1)K_{12} - y^{(2)}(\alpha_2^{\text{n}}-\alpha_2)K_{22} $$
+  $$ b = \begin{cases} b_1 & 0<\alpha_1^{\text{n}}<C \\ b_2 & 0<\alpha_2^{\text{n}}<C \\ (b_1+b_2)/2 & \text{en otro caso} \end{cases} $$
+
+  <h3>Heurísticas de selección (Platt)</h3>
+  <ul>
+    <li><strong>Lazo externo</strong> (elige $\alpha_1$): recorre los ejemplos que <em>violan las KKT</em>, priorizando los no acotados ($0<\alpha<C$), que son los que más cambian.</li>
+    <li><strong>Lazo interno</strong> (elige $\alpha_2$): el que maximiza $|E_1 - E_2|$, para dar el paso más grande posible.</li>
+  </ul>
+
+  <h3>Pseudocódigo (versión simplificada, la que se usa en el demo)</h3>
+<pre><code>α = 0, b = 0, passes = 0
+mientras passes &lt; max_passes:
+    cambios = 0
+    para i = 1..m:
+        E_i = f(x_i) - y_i
+        si (y_i·E_i &lt; -tol y α_i &lt; C) o (y_i·E_i &gt; tol y α_i &gt; 0):     # viola KKT
+            elegir j ≠ i al azar;   E_j = f(x_j) - y_j
+            calcular L, H;          si L == H: continuar
+            η = 2K_ij - K_ii - K_jj; si η ≥ 0:  continuar
+            α_j ← clip(α_j - y_j(E_i - E_j)/η, L, H)
+            si |α_j - α_j_viejo| &lt; 1e-5: continuar
+            α_i ← α_i + y_i·y_j·(α_j_viejo - α_j)
+            actualizar b con b_1 / b_2
+            cambios += 1
+    passes = passes + 1 si cambios == 0, si no 0</code></pre>
+
+  <div class="box ok">
+    <strong>Ventajas de SMO</strong>
+    No necesita un solver QP ni almacenar la matriz de Gram completa (memoria $O(m)$), cada paso es analítico y barato,
+    y en la práctica escala muy bien. Es la base de <code>LIBSVM</code> (y por lo tanto de <code>sklearn.svm.SVC</code>).
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="demo">
+  <h2>9. Demo interactivo: SVM entrenada con SMO</h2>
+  <p>
+    Elegí un conjunto de datos, un kernel y los hiperparámetros, y entrená. El fondo muestra $\text{signo}(f(x))$,
+    la línea negra es la frontera $f(x)=0$, las punteadas son $f(x)=\pm1$ y los puntos con anillo negro son los vectores soporte.
+    Hacé clic en el lienzo para agregar puntos (clic izquierdo = clase +1, <kbd>Shift</kbd>+clic = clase −1).
+  </p>
+  <div class="demo">
+    <canvas id="cv" width="480" height="480"></canvas>
+    <div class="controls">
+      <label>Datos
+        <select id="dataset">
+          <option value="lineal">Linealmente separable</option>
+          <option value="circulos" selected>Círculos concéntricos</option>
+          <option value="xor">XOR</option>
+          <option value="lunas">Dos lunas</option>
+        </select>
+      </label>
+      <label>Kernel
+        <select id="kernel">
+          <option value="lin">Lineal</option>
+          <option value="poly">Polinomial (grado 3)</option>
+          <option value="rbf" selected>Gaussiano (RBF)</option>
+        </select>
+      </label>
+      <label>C = <span id="cval">1.0</span>
+        <input type="range" id="C" min="-2" max="3" step="0.1" value="0">
+      </label>
+      <label>γ (RBF) = <span id="gval">2.0</span>
+        <input type="range" id="gamma" min="-1" max="2" step="0.1" value="0.3">
+      </label>
+      <button id="train">Entrenar (SMO)</button>
+      <button id="regen" class="sec">Regenerar datos</button>
+      <div id="stats">—</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="resumen">
+  <h2>10. Resumen</h2>
+  <table>
+    <tr><th>Concepto</th><th>Idea clave</th></tr>
+    <tr><td>Margen geométrico</td><td>Distancia real al hiperplano, $\gamma = \hat\gamma/\|w\|$; invariante al escalado.</td></tr>
+    <tr><td>Margen óptimo</td><td>$\min \frac12\|w\|^2$ s.a. $y^{(i)}(w^\top x^{(i)}+b)\ge1$. QP convexo, óptimo global.</td></tr>
+    <tr><td>Dual</td><td>$\max \sum\alpha_i - \frac12\sum y_iy_j\alpha_i\alpha_j\langle x_i,x_j\rangle$; $w=\sum\alpha_iy_ix_i$.</td></tr>
+    <tr><td>Vectores soporte</td><td>Puntos con $\alpha_i>0$ (holgura complementaria). Sólo ellos definen la frontera.</td></tr>
+    <tr><td>Kernel</td><td>$K(x,z)=\phi(x)^\top\phi(z)$ calculado sin construir $\phi$. Válido ⇔ Gram simétrica PSD (Mercer).</td></tr>
+    <tr><td>Dimensión infinita</td><td>RBF ⇒ $\phi$ con infinitos monomios (serie de Taylor). Se maneja porque sólo guardamos $m$ valores $\alpha_i$.</td></tr>
+    <tr><td>Margen blando</td><td>Holguras $\xi_i$ con costo $C$; en el dual: $0\le\alpha_i\le C$. Equivale a hinge loss + L2.</td></tr>
+    <tr><td>SMO</td><td>Ascenso por coordenadas de a <strong>dos</strong> $\alpha$ (por la restricción $\sum\alpha_iy_i=0$), con solución analítica y recorte a $[L,H]$.</td></tr>
+  </table>
+  <p style="color:var(--muted); font-size:.9rem">
+    Referencias: A. Ng, <em>CS229 Lecture Notes — Support Vector Machines</em> (Stanford); J. Platt, <em>Sequential Minimal Optimization:
+    A Fast Algorithm for Training Support Vector Machines</em> (1998); C. Bishop, <em>Pattern Recognition and Machine Learning</em>, cap. 6–7.
+  </p>
+</section>
+
+</main>
+
+<footer>Maestría en IA · Universidad de Palermo · Machine Learning — Clase 6</footer>
+
+<script>
+(function () {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  let X = [], Y = [], model = null;
+
+  // --- utilidades ---
+  function randn() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  const toPx = (p) => [(p[0] + 1) / 2 * W, (1 - (p[1] + 1) / 2) * H];
+  const toData = (px, py) => [px / W * 2 - 1, 1 - py / H * 2];
+
+  function genData(kind) {
+    X = []; Y = [];
+    const n = 40;
+    for (let i = 0; i < n; i++) {
+      if (kind === 'lineal') {
+        X.push([0.4 + 0.22 * randn(), 0.3 + 0.22 * randn()]); Y.push(1);
+        X.push([-0.4 + 0.22 * randn(), -0.3 + 0.22 * randn()]); Y.push(-1);
+      } else if (kind === 'circulos') {
+        let a = Math.random() * 2 * Math.PI, r = 0.25 * Math.random();
+        X.push([r * Math.cos(a), r * Math.sin(a)]); Y.push(1);
+        a = Math.random() * 2 * Math.PI; r = 0.6 + 0.08 * randn();
+        X.push([r * Math.cos(a), r * Math.sin(a)]); Y.push(-1);
+      } else if (kind === 'xor') {
+        const sx = Math.random() < 0.5 ? -1 : 1, sy = Math.random() < 0.5 ? -1 : 1;
+        X.push([sx * 0.45 + 0.15 * randn(), sy * 0.45 + 0.15 * randn()]); Y.push(sx * sy);
+        const tx = Math.random() < 0.5 ? -1 : 1, ty = Math.random() < 0.5 ? -1 : 1;
+        X.push([tx * 0.45 + 0.15 * randn(), ty * 0.45 + 0.15 * randn()]); Y.push(tx * ty);
+      } else {
+        let t = Math.PI * Math.random();
+        X.push([0.5 * Math.cos(t) - 0.25 + 0.05 * randn(), 0.5 * Math.sin(t) - 0.1 + 0.05 * randn()]); Y.push(1);
+        t = Math.PI * Math.random();
+        X.push([0.5 - 0.5 * Math.cos(t) - 0.25 + 0.05 * randn(), -0.5 * Math.sin(t) + 0.15 + 0.05 * randn()]); Y.push(-1);
+      }
+    }
+    model = null;
+  }
+
+  function getParams() {
+    const C = Math.pow(10, parseFloat(document.getElementById('C').value));
+    const gamma = Math.pow(10, parseFloat(document.getElementById('gamma').value));
+    const kernel = document.getElementById('kernel').value;
+    document.getElementById('cval').textContent = C.toFixed(C < 1 ? 2 : 1);
+    document.getElementById('gval').textContent = gamma.toFixed(gamma < 1 ? 2 : 1);
+    return { C, gamma, kernel };
+  }
+
+  function makeKernel(kind, gamma) {
+    if (kind === 'lin') return (a, b) => a[0] * b[0] + a[1] * b[1];
+    if (kind === 'poly') return (a, b) => Math.pow(a[0] * b[0] + a[1] * b[1] + 1, 3);
+    return (a, b) => { const dx = a[0] - b[0], dy = a[1] - b[1]; return Math.exp(-gamma * (dx * dx + dy * dy)); };
+  }
+
+  // --- SMO simplificado ---
+  function smo(X, Y, C, K, tol = 1e-3, maxPasses = 10, maxIter = 20000) {
+    const m = X.length;
+    const G = []; // matriz de Gram precalculada (m chico)
+    for (let i = 0; i < m; i++) { G.push(new Float64Array(m)); for (let j = 0; j < m; j++) G[i][j] = K(X[i], X[j]); }
+    const a = new Float64Array(m); let b = 0, passes = 0, iter = 0, updates = 0;
+    const f = (i) => { let s = b; for (let k = 0; k < m; k++) if (a[k] !== 0) s += a[k] * Y[k] * G[k][i]; return s; };
+    while (passes < maxPasses && iter < maxIter) {
+      let changed = 0;
+      for (let i = 0; i < m; i++) {
+        const Ei = f(i) - Y[i];
+        if ((Y[i] * Ei < -tol && a[i] < C) || (Y[i] * Ei > tol && a[i] > 0)) {
+          let j = Math.floor(Math.random() * (m - 1)); if (j >= i) j++;
+          const Ej = f(j) - Y[j];
+          const ai = a[i], aj = a[j];
+          let L, Hh;
+          if (Y[i] !== Y[j]) { L = Math.max(0, aj - ai); Hh = Math.min(C, C + aj - ai); }
+          else { L = Math.max(0, ai + aj - C); Hh = Math.min(C, ai + aj); }
+          if (Math.abs(L - Hh) < 1e-12) continue;
+          const eta = 2 * G[i][j] - G[i][i] - G[j][j];
+          if (eta >= 0) continue;
+          let ajn = aj - Y[j] * (Ei - Ej) / eta;
+          ajn = Math.min(Hh, Math.max(L, ajn));
+          if (Math.abs(ajn - aj) < 1e-5) continue;
+          const ain = ai + Y[i] * Y[j] * (aj - ajn);
+          const b1 = b - Ei - Y[i] * (ain - ai) * G[i][i] - Y[j] * (ajn - aj) * G[i][j];
+          const b2 = b - Ej - Y[i] * (ain - ai) * G[i][j] - Y[j] * (ajn - aj) * G[j][j];
+          a[i] = ain; a[j] = ajn;
+          if (ain > 0 && ain < C) b = b1; else if (ajn > 0 && ajn < C) b = b2; else b = (b1 + b2) / 2;
+          changed++; updates++;
+        }
+      }
+      iter++;
+      passes = changed === 0 ? passes + 1 : 0;
+    }
+    const sv = [];
+    for (let i = 0; i < m; i++) if (a[i] > 1e-6) sv.push(i);
+    const decide = (x) => { let s = b; for (const k of sv) s += a[k] * Y[k] * K(X[k], x); return s; };
+    let correct = 0; for (let i = 0; i < m; i++) if (Math.sign(decide(X[i])) === Y[i]) correct++;
+    return { a, b, sv, decide, iter, updates, acc: correct / m, C };
+  }
+
+  // --- dibujo ---
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    if (model) {
+      const step = 4, nx = W / step, ny = H / step;
+      const F = [];
+      for (let gy = 0; gy <= ny; gy++) { F.push(new Float64Array(nx + 1)); for (let gx = 0; gx <= nx; gx++) F[gy][gx] = model.decide(toData(gx * step, gy * step)); }
+      for (let gy = 0; gy < ny; gy++) for (let gx = 0; gx < nx; gx++) {
+        const v = F[gy][gx], t = Math.min(1, Math.abs(v) / 2);
+        ctx.fillStyle = v >= 0 ? `rgba(224,49,49,${0.08 + 0.22 * t})` : `rgba(25,113,194,${0.08 + 0.22 * t})`;
+        ctx.fillRect(gx * step, gy * step, step, step);
+      }
+      // contornos por cambio de signo entre celdas vecinas
+      const levels = [[0, '#212529', 2.2], [1, '#e03131', 1.2], [-1, '#1971c2', 1.2]];
+      for (const [lv, col, sz] of levels) {
+        ctx.fillStyle = col;
+        for (let gy = 0; gy < ny; gy++) for (let gx = 0; gx < nx; gx++) {
+          const s = F[gy][gx] - lv, r = F[gy][gx + 1] - lv, d = F[gy + 1][gx] - lv;
+          if (s * r <= 0 || s * d <= 0) {
+            if (lv !== 0 && (gx + gy) % 2) continue; // punteado
+            ctx.fillRect(gx * step + step / 2 - sz / 2, gy * step + step / 2 - sz / 2, sz, sz);
+          }
+        }
+      }
+    }
+    const svSet = new Set(model ? model.sv : []);
+    for (let i = 0; i < X.length; i++) {
+      const [px, py] = toPx(X[i]);
+      ctx.beginPath(); ctx.arc(px, py, 5, 0, 2 * Math.PI);
+      ctx.fillStyle = Y[i] > 0 ? '#e03131' : '#1971c2'; ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = '#fff'; ctx.stroke();
+      if (svSet.has(i)) {
+        ctx.beginPath(); ctx.arc(px, py, 9, 0, 2 * Math.PI);
+        ctx.lineWidth = 2; ctx.strokeStyle = model.a[i] >= model.C - 1e-6 ? '#e8590c' : '#212529'; ctx.stroke();
+      }
+    }
+  }
+
+  function train() {
+    const { C, gamma, kernel } = getParams();
+    if (X.length < 2 || new Set(Y).size < 2) { document.getElementById('stats').textContent = 'Se necesitan puntos de ambas clases.'; return; }
+    const t0 = performance.now();
+    model = smo(X, Y, C, makeKernel(kernel, gamma));
+    const t1 = performance.now();
+    const atC = model.sv.filter(i => model.a[i] >= C - 1e-6).length;
+    document.getElementById('stats').textContent =
+      `Ejemplos: ${X.length}\n` +
+      `Vectores soporte: ${model.sv.length}  (${atC} con α = C, anillo naranja)\n` +
+      `Exactitud en entrenamiento: ${(model.acc * 100).toFixed(1)} %\n` +
+      `Barridos SMO: ${model.iter} · actualizaciones de pares: ${model.updates}\n` +
+      `b = ${model.b.toFixed(4)} · tiempo: ${(t1 - t0).toFixed(0)} ms`;
+    draw();
+  }
+
+  cv.addEventListener('click', (e) => {
+    const r = cv.getBoundingClientRect();
+    const px = (e.clientX - r.left) * W / r.width, py = (e.clientY - r.top) * H / r.height;
+    X.push(toData(px, py)); Y.push(e.shiftKey ? -1 : 1);
+    train();
+  });
+  document.getElementById('train').onclick = train;
+  document.getElementById('regen').onclick = () => { genData(document.getElementById('dataset').value); train(); };
+  document.getElementById('dataset').onchange = () => { genData(document.getElementById('dataset').value); train(); };
+  ['kernel', 'C', 'gamma'].forEach(id => document.getElementById(id).addEventListener('change', train));
+  ['C', 'gamma'].forEach(id => document.getElementById(id).addEventListener('input', getParams));
+
+  genData('circulos');
+  train();
+})();
+</script>
+</body>
+</html>

@@ -14,8 +14,13 @@
 \usepackage{booktabs,tabularx,multirow}
 \usepackage{siunitx}
 \sisetup{output-decimal-marker={,}, group-separator={.}, group-minimum-digits=4}
-\usepackage{caption,subcaption}
 \usepackage{xcolor}
+\definecolor{tinta}{HTML}{2B2D42}
+\definecolor{azultp}{HTML}{2E5EAA}
+\usepackage{caption,subcaption}
+\captionsetup{font=small, labelfont={bf,color=azultp}, labelsep=period, margin=0.5cm}
+\captionsetup[figure]{skip=6pt}
+\usepackage{csquotes}
 \usepackage{algorithm,algpseudocode}
 \usepackage{tikz}
 \floatname{algorithm}{Algoritmo}

@@ -5,7 +5,6 @@ Trabajos de la materia Machine Learning. Autor: Vicente Matias Danguise.
 | Carpeta | Contenido |
 |---|---|
 | [`TP_Machine_Learning_Epilepsia/`](TP_Machine_Learning_Epilepsia/) | **Trabajo final.** Detección de crisis epilépticas en EEG (Bonn y CHB-MIT): Fourier, modelos convexos, CNN, comparativa de optimizadores, ROC/AUC y umbral de Neyman-Pearson. Incluye notebooks, scripts, resultados e informe en LaTeX. |
-| [`TP_Final_Crisis_EEG/`](TP_Final_Crisis_EEG/) | Versión anterior del trabajo (CHB-MIT, MLP, 6 optimizadores × 5 activaciones). |
 | [`PIPELINE_LIBROS/`](PIPELINE_LIBROS/) | Código del pipeline usado para traducir la bibliografía de la materia (layout, transcripción, traducción con LLM, render a PDF y validación). Documentado en [`TECNICA_Y_DECISIONES_TRADUCCION.md`](TECNICA_Y_DECISIONES_TRADUCCION.md) y [`PROGRESO_TRADUCCION.md`](PROGRESO_TRADUCCION.md). |
 
 ## Qué no está en el repo

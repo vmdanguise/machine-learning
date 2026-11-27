@@ -19,6 +19,21 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
+# Auxiliares de LaTeX (el PDF final del informe sí se versiona)
+**/informe/*.aux
+**/informe/*.log
+**/informe/*.bbl
+**/informe/*.bcf
+**/informe/*.blg
+**/informe/*.run.xml
+**/informe/*.toc
+**/informe/*.lof
+**/informe/*.lot
+**/informe/*.out
+**/informe/*.synctex.gz
+**/informe/capitulos/*.aux
+TP_Machine_Learning_Epilepsia/informe/main.pdf
+
 # Respaldos
 _backup*/
 *.bak_*
